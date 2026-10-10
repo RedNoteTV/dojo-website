@@ -1,0 +1,11 @@
+{% extends "page.html" %}
+{% block sections %}
+{% for s in sections %}{% set g = schedule(s.content, lang) %}
+{% if g %}
+<section class="card"><h2>{{ s.title }}</h2>{% include "partials/schedule_grid.html" %}</section>
+{% else %}
+<article class="card"><h2>{{ s.title }}</h2>{% with text=s.content %}{% include "partials/content.html" %}{% endwith %}</article>
+{% endif %}
+{% endfor %}
+{% endblock %}
+{% block extra %}<p><a class="btn" href="/contact">{{ t.trial }}</a></p>{% endblock %}

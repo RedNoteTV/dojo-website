@@ -1,0 +1,21 @@
+<form class="card" hx-post="{{ ('/admin/sections/' ~ s.id) if s else '/admin/sections' }}" hx-target="#sections-list" hx-swap="outerHTML">
+  <h2>{{ 'Sectie bewerken' if s else 'Nieuwe sectie' }}</h2>
+  <label for="f-title">Titel</label>
+  <input id="f-title" name="title" maxlength="200" required value="{{ s.title if s else '' }}">
+  <div class="row">
+    <div><label for="f-page">Pagina</label>
+      <select id="f-page" name="page">{% for p, label in page_labels.items() %}<option value="{{ p }}" {{ 'selected' if s and s.page == p }}>{{ label }}</option>{% endfor %}</select></div>
+    <div><label for="f-lang">Taal</label>
+      <select id="f-lang" name="lang">{% for l in ['nl','fr','en','es','ja','all'] %}<option value="{{ l }}" {{ 'selected' if s and s.lang == l }}>{{ l }}{{ ' (alle talen)' if l == 'all' }}</option>{% endfor %}</select></div>
+    <div><label for="f-pos">Volgorde</label>
+      <input id="f-pos" name="position" type="number" min="0" max="999" value="{{ s.position if s else 0 }}"></div>
+  </div>
+  <label for="f-content">Tekst</label>
+  <textarea id="f-content" name="content" rows="10">{{ s.content if s else '' }}</textarea>
+  <p class="hint">Lege regel = nieuwe alinea. Een tabel maak je met streepjes tussen de kolommen, bv.
+Dag | Les | Uur
+Maandag | Karate | 19:00-20:00</p>
+  <div id="form-msg" role="alert"></div>
+  <div class="row"><button class="btn" type="submit">Opslaan</button>
+  <button class="btn danger" type="button" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
+</form>

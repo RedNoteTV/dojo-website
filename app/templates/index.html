@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Rishinjuku Karate{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>RISHINJUKU KARATE 理心塾</h1>
+  <p class="motto">Self Defense for Self Confidence</p>
+  {% if slide %}{% include "partials/hero.html" %}{% endif %}
+</section>
+<div class="cards">
+  <a href="/about">{{ t.about }}</a>
+  <a href="/schedule">{{ t.schedule }}</a>
+  <a href="/prices">{{ t.prices }}</a>
+  <a href="/contact">{{ t.contact }}</a>
+</div>
+<main>
+  {% for s in sections %}
+  <article class="card"><h2>{{ s.title }}</h2>{% with text=s.content %}{% include "partials/content.html" %}{% endwith %}</article>
+  {% endfor %}
+  <p style="text-align:center"><a class="btn" href="/contact">{{ t.trial }}</a></p>
+</main>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "admin/layout.html" %}
+{% block title %}Beheer{% endblock %}
+{% block content %}
+<main>
+  <div class="card">
+    <strong>Zo werkt het</strong>
+    <p>1. Klik op Bewerken bij de tekst die je wil aanpassen.
+2. Pas de tekst aan en klik op Opslaan.
+3. Klaar: het staat meteen op de website.</p>
+  </div>
+  <button class="btn" hx-get="/admin/sections/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuwe sectie</button>
+  <div id="form-area"></div>
+  {% include "admin/sections_list.html" %}
+</main>
+{% endblock %}

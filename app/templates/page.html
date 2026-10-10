@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<main>
+  <h1>{{ title }}</h1>
+  {% block sections %}
+  {% for s in sections %}
+  <article class="card"><h2>{{ s.title }}</h2>{% with text=s.content %}{% include "partials/content.html" %}{% endwith %}</article>
+  {% endfor %}
+  {% endblock %}
+  {% block extra %}{% endblock %}
+</main>
+{% endblock %}

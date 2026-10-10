@@ -1,0 +1,12 @@
+{# Weekraster. Op een telefoon wordt het automatisch een lijst per dag (zie CSS). #}
+<div class="sched" style="--cols:{{ g.ncols }}">
+{% for h in g.heads %}
+  <div class="sd-head{{ ' today' if h.today }}" style="grid-column:{{ h.col }};grid-row:1">{{ h.label }}{% if h.today %}<small>{{ t.today }}</small>{% endif %}</div>
+  {% for c in g.cards if c.col == h.col %}
+  <div class="slot k-{{ c.kind }}{{ ' today' if c.today }}" style="grid-column:{{ c.col }};grid-row:{{ c.row }}">
+    <span class="time">{{ c.time }}</span><strong>{{ c.name }}</strong>{% if c.who %}<small>{{ c.who }}</small>{% endif %}
+  </div>
+  {% endfor %}
+{% endfor %}
+</div>
+<p class="legend">{% for k, label in g.kinds %}<span class="k-{{ k }}">{{ label }}</span>{% endfor %}</p>

@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="SF Dojo – Rishinjuku Karate, MMA, kickboxing, grappling, self-defence and G-Karate in Oud-Heverlee near Leuven.">
+<link rel="icon" href="/static/logo.png">
+<title>{% block title %}{% endblock %} · SF Dojo</title>
+<style>
+/* Eén stijlblok voor de hele site. Kleuren staan bovenaan als variabelen. */
+*{box-sizing:border-box}
+body{--ink:#1d2329;--paper:#f3ecdc;--bg:#f7f1e3;--card:#fffaf0;--text:#1f2328;--muted:#5b616a;--accent:#b08a57;--on-accent:#1b1610;--line:#e2d6bd;
+  margin:0;background:var(--bg);color:var(--text);font:18px/1.65 "Noto Sans","Segoe UI",system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
+body.dark{--bg:#14181c;--card:#1d2329;--text:#efe9dc;--muted:#a9a395;--accent:#c9a97a;--on-accent:#14110c;--line:#2e363e}
+@media(prefers-color-scheme:dark){body:not(.light){--bg:#14181c;--card:#1d2329;--text:#efe9dc;--muted:#a9a395;--accent:#c9a97a;--on-accent:#14110c;--line:#2e363e}}
+h1,h2,h3{font-family:"Hiragino Mincho ProN","Noto Serif JP","Iowan Old Style",Georgia,serif;line-height:1.25}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+/* kop */
+header{background:var(--ink);color:var(--paper)}
+.bar{max-width:1100px;margin:auto;padding:.6rem 1rem;display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font-weight:700;letter-spacing:.04em}
+.brand img{border-radius:50%}
+nav{display:flex;flex-wrap:wrap}
+nav a,.langs a{color:var(--paper);text-decoration:none;padding:.4rem .7rem;border-radius:6px}
+nav a:hover,.langs a:hover{background:#ffffff1f}
+.langs a{padding:.3rem .5rem;font-size:.9rem}
+.langs a.on{background:var(--accent);color:var(--on-accent)}
+.tools{display:flex;align-items:center;gap:.4rem}
+/* knoppen */
+.btn{display:inline-block;min-height:48px;padding:.7rem 1.4rem;background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+.btn:hover{filter:brightness(1.08)}
+.btn.mini{min-height:40px;padding:.4rem .9rem;font-size:.95rem}
+.btn.danger{background:#b3261e;color:#fff}
+/* hero */
+.hero{background:radial-gradient(circle at 50% 25%,#51443a 0,var(--ink) 68%);color:var(--paper);text-align:center;padding:2.2rem 1rem 4rem;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;left:-10%;right:-10%;top:58%;height:16px;background:linear-gradient(90deg,transparent,var(--paper) 25%,var(--paper) 75%,transparent);transform:rotate(-16deg);opacity:.8;filter:blur(1.5px)}
+.hero>*{position:relative;z-index:1}
+.hero h1{font-size:clamp(1.8rem,6vw,3.2rem);margin:0 0 .3rem}
+.hero .motto{margin:0 0 1.5rem;color:#e6d9bd;font-size:1.15rem}
+.slide{position:relative;max-width:900px;margin:0 auto;border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;box-shadow:0 10px 40px #0008}
+.slide img{width:100%;height:100%;object-fit:cover;display:block}
+.slide .cap{position:absolute;left:0;right:0;bottom:0;padding:1.5rem 1rem .6rem;background:linear-gradient(transparent,#000b)}
+.slide .nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border:0;border-radius:50%;background:#000a;color:#fff;font-size:1.6rem;cursor:pointer}
+.nav.prev{left:.6rem}.nav.next{right:.6rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;max-width:1000px;margin:-2.2rem auto 1rem;padding:0 1rem;position:relative;z-index:2}
+.cards a{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.1rem 1.3rem;text-decoration:none;font-weight:700;font-size:1.15rem;text-align:center}
+.cards a:hover{border-color:var(--accent)}
+/* inhoud */
+main{max-width:900px;margin:0 auto;padding:1.5rem 1rem 3rem}
+main.narrow{max-width:460px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.2rem 1.4rem;margin:1rem 0}
+.card h2{margin-top:0}
+.card p{white-space:pre-line;margin:.6rem 0}
+.iban{font-size:clamp(1.4rem,5vw,2rem);font-weight:700;letter-spacing:.06em;margin:.5rem 0}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--line)}
+th{background:var(--ink);color:var(--paper)}
+footer{background:var(--card);color:var(--muted);padding:2rem 1rem 1rem;border-top:1px solid var(--line);font-size:.95rem}
+footer a{color:var(--text)}
+.foot{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1.5rem;line-height:1.8}
+.foot strong{color:var(--text)}
+.copy{text-align:center;margin:1.5rem 0 0;font-size:.85rem}
+/* hamburgermenu zonder JavaScript: verborgen vinkje + label */
+.menu-toggle{position:absolute;opacity:0;width:1px;height:1px}
+.burger{display:none;cursor:pointer;font-size:1.6rem;line-height:1;padding:.45rem .8rem;border-radius:8px;border:1px solid #ffffff55;color:var(--paper);user-select:none}
+.burger::before{content:"☰"}
+.menu-toggle:checked+.burger::before{content:"✕"}
+.menu-toggle:focus-visible+.burger{outline:3px solid var(--accent)}
+.menu{display:flex;flex:1;align-items:center;justify-content:space-between;gap:.4rem 1.2rem}
+nav a{font-size:.95rem}
+.langs{display:flex;gap:.1rem}
+.langs a{display:inline-flex;align-items:center;gap:.35rem}
+.langs img{display:block;border-radius:3px;box-shadow:0 0 0 1px #0005}
+@media(max-width:940px){
+ .burger{display:block}
+ .menu{display:none;flex-basis:100%;flex-direction:column;align-items:stretch}
+ .menu-toggle:checked~.menu{display:flex}
+ nav{flex-direction:column}
+ nav a{padding:.8rem .6rem;border-bottom:1px solid #ffffff1f;font-size:1.05rem}
+ .tools{justify-content:space-between;padding:.3rem 0 .6rem}
+}
+/* lessenrooster */
+.sched{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:.6rem;margin:1rem 0}
+.sd-head{text-align:center;font-weight:700;padding:.55rem;border-radius:10px;background:var(--ink);color:var(--paper)}
+.sd-head small{display:block;font-weight:400;font-size:.8rem}
+.sd-head.today{background:var(--accent);color:var(--on-accent)}
+.slot{display:flex;flex-direction:column;gap:.15rem;justify-content:center;text-align:center;padding:.8rem .7rem;border-radius:12px;background:color-mix(in srgb,var(--c) 18%,var(--card));border:1px solid color-mix(in srgb,var(--c) 45%,var(--line));border-top:5px solid var(--c)}
+.slot .time{font-size:.85rem;font-weight:700;color:var(--muted)}
+.slot strong{line-height:1.3}
+.slot small{color:var(--muted)}
+.slot.today{box-shadow:0 0 0 3px var(--accent)}
+.k-karate{--c:#3b82c4}.k-striking{--c:#d1495b}.k-grappling{--c:#e08a3c}.k-gkarate{--c:#d9a91f}.k-open{--c:#3f9d6b}.k-other{--c:#8a8f98}
+.legend{display:flex;flex-wrap:wrap;gap:.3rem 1.1rem;font-size:.9rem;color:var(--muted);margin:.5rem 0 0}
+.legend span::before{content:"";display:inline-block;width:.8rem;height:.8rem;border-radius:3px;background:var(--c);margin-right:.4rem}
+@media(max-width:760px){
+ .sched{grid-template-columns:1fr}
+ .sched>*{grid-column:auto!important;grid-row:auto!important}
+ .sd-head{text-align:left;margin-top:.6rem}
+ .slot{text-align:left;align-items:flex-start}
+}
+/* beheer: grote velden, hoog contrast */
+label{display:block;font-weight:700;margin:.9rem 0 .2rem}
+input,select,textarea{width:100%;font:inherit;padding:.7rem;border:2px solid var(--muted);border-radius:8px;background:var(--card);color:var(--text)}
+.row{display:flex;gap:.6rem;flex-wrap:wrap}
+.row>div{flex:1;min-width:140px}
+.item{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;justify-content:space-between}
+.item small{color:var(--muted)}
+.err{color:#b3261e;font-weight:700}
+.ok{color:#2e7d32;font-weight:700}
+.hint{color:var(--muted);font-size:.9rem;white-space:pre-line}
+body.dark .err{color:#ff8a80}body.dark .ok{color:#81c784}
+@media(prefers-color-scheme:dark){body:not(.light) .err{color:#ff8a80}body:not(.light) .ok{color:#81c784}}
+/* tabellen worden kaartjes op een telefoon */
+@media(max-width:600px){
+ thead{display:none}
+ tr{display:block;border:1px solid var(--line);border-radius:8px;margin:.6rem 0;padding:.3rem}
+ td{display:flex;justify-content:space-between;gap:1rem;border:0;padding:.3rem .5rem}
+ td::before{content:attr(data-label);font-weight:700;color:var(--muted)}
+}
+</style>
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body class="{{ theme }}"{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
+{% block header %}
+<header><div class="bar">
+  <a class="brand" href="/"><img src="/static/logo.png" alt="" width="44" height="44"><span>SF DOJO</span></a>
+  <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-label="{{ t.menu }}">
+  <label for="menu-toggle" class="burger"></label>
+  <div class="menu">
+    <nav>
+      <a href="/">{{ t.home }}</a><a href="/about">{{ t.about }}</a><a href="/disciplines">{{ t.disciplines }}</a>
+      <a href="/schedule">{{ t.schedule }}</a><a href="/prices">{{ t.prices }}</a><a href="/contact">{{ t.contact }}</a>
+    </nav>
+    <div class="tools">
+      <span class="langs">{% for l in langs %}<a href="?lang={{ l }}" class="{{ 'on' if l == lang }}" hreflang="{{ l }}" title="{{ lang_names[l] }}"><img src="/static/flags/{{ l }}.svg" alt="" width="24" height="16"><span>{{ l|upper }}</span></a>{% endfor %}</span>
+      <button class="btn mini" hx-post="/theme" hx-swap="none" title="Auto / Light / Dark" aria-label="Auto / Light / Dark">◐</button>
+    </div>
+  </div>
+</div></header>
+{% endblock %}
+{% block content %}{% endblock %}
+{% block footer %}
+<footer>
+  <div class="foot">
+    <div><strong>SFDOJO vzw</strong><br>Rishinjuku Karate 理心塾<br>Banhagestraat 75<br>3052 Oud-Heverlee<br><em>Self Defense for Self Confidence</em></div>
+    <div><strong>{{ t.contact }}</strong><br><a href="mailto:info@sfdojo.be">info@sfdojo.be</a><br><a href="tel:+32471687598">+32 471 68 75 98</a></div>
+    <div><strong>{{ t.links }}</strong><br><a href="/schedule">{{ t.schedule }}</a><br><a href="/prices">{{ t.prices }}</a><br><a href="/payments">{{ t.payments }}</a></div>
+    {% set soc = footer_links() %}{% if soc %}<div><strong>{{ t.follow }}</strong>{% for name, url in soc %}<br><a href="{{ url }}" target="_blank" rel="noopener nofollow">{{ name }}</a>{% endfor %}</div>{% endif %}
+  </div>
+  <p class="copy">© {{ year() }} SFDOJO vzw</p>
+</footer>
+{% endblock %}
+</body>
+</html>

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Inloggen{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<main class="narrow">
+  <h1>SF Dojo – Beheer</h1>
+  <form class="card" hx-post="/admin/login" hx-target="#msg" hx-swap="innerHTML">
+    <label for="u">Gebruikersnaam</label>
+    <input id="u" name="username" autocomplete="username" autocapitalize="none" required autofocus>
+    <label for="p">Wachtwoord</label>
+    <input id="p" name="password" type="password" autocomplete="current-password" required>
+    <p id="msg" role="alert"></p>
+    <button class="btn" type="submit">Inloggen</button>
+  </form>
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

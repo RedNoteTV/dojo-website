@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block header %}
+<header><div class="bar">
+  <a class="brand" href="/admin">SF Dojo – Beheer</a>
+  <span class="row">
+    <a class="btn mini" href="/" target="_blank" rel="noopener">Website bekijken</a>
+    <a class="btn mini" href="/admin/password">Wachtwoord wijzigen</a>
+    <button class="btn mini" hx-post="/admin/logout">Uitloggen ({{ user.username }})</button>
+  </span>
+</div></header>
+{% endblock %}
+{% block footer %}{% endblock %}

@@ -1,0 +1,13 @@
+<div id="sections-list">
+  {% if msg %}<p class="ok" role="status">{{ msg }}</p>{% endif %}
+  {% for s in sections %}
+  <div class="card item">
+    <div><strong>{{ s.title }}</strong><br><small>pagina: {{ page_labels.get(s.page, s.page) }} · taal: {{ s.lang }} · volgorde: {{ s.position }}</small></div>
+    <div class="row">
+      <button class="btn mini" hx-get="/admin/sections/{{ s.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top">Bewerken</button>
+      <button class="btn mini danger" hx-delete="/admin/sections/{{ s.id }}" hx-confirm="Zeker weten? Dit verdwijnt meteen van de website." hx-target="#sections-list" hx-swap="outerHTML">Verwijderen</button>
+    </div>
+  </div>
+  {% else %}<p>Nog geen secties. Klik op "+ Nieuwe sectie".</p>{% endfor %}
+</div>
+{% if oob %}<div id="form-area" hx-swap-oob="true"></div>{% endif %}
