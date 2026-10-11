@@ -3,19 +3,48 @@
   python seed.py                 -> eerste keer (bestaande data blijft staan)
   python seed.py --reset-users   -> nieuwe wachtwoorden voor de 3 beheerders
   python seed.py --reset-content -> WIST alle secties en slides en zet de dummy-inhoud terug
+  python seed.py --init-env      -> maakt .env aan (of vult ontbrekende instellingen aan) met een verse SECRET_KEY
+  python seed.py --reset-2fa NAAM -> zet tweestapsverificatie van één beheerder uit (telefoon kwijt en geen herstelcodes)
   python seed.py --unban         -> heft ALLE geblokkeerde IP's op (of: --unban 1.2.3.4 voor één IP)
 Wachtwoorden worden willekeurig gemaakt en ÉÉN keer getoond: noteer ze meteen.
 """
 import os
+import re
 import secrets
 import sys
+from datetime import date
+from pathlib import Path
 
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
-from app.models import LoginBlock, Post, Section, Slide, User
+from app.models import Closure, LoginBlock, Post, Section, Slide, Totp, User
+
+if "--init-env" in sys.argv:                   # .env klaarzetten zonder iets te overschrijven
+    env, example = Path(".env"), Path(".env.example")
+    cur = env.read_text() if env.exists() else ""
+    have = {l.split("=", 1)[0].strip() for l in cur.splitlines() if "=" in l and not l.lstrip().startswith("#")}
+    add = [l for l in example.read_text().splitlines()
+           if "=" in l and not l.lstrip().startswith("#") and l.split("=", 1)[0].strip() not in have]
+    key = secrets.token_hex(32)
+    if re.search(r"^SECRET_KEY=(vervang-mij)?\s*$", cur, re.M):
+        cur = re.sub(r"^SECRET_KEY=.*$", f"SECRET_KEY={key}", cur, flags=re.M)
+    elif "SECRET_KEY" not in have:
+        add = [f"SECRET_KEY={key}" if l.startswith("SECRET_KEY=") else l for l in add]
+    env.write_text(cur.rstrip("\n") + ("\n" if cur else "") + ("\n# --- toegevoegd door seed.py --init-env ---\n" + "\n".join(add) + "\n" if add else ""))
+    env.chmod(0o600)
+    print(f".env staat in: {env.resolve()}  ({len(add)} instelling(en) toegevoegd; bestaande waarden zijn ongemoeid gelaten)")
+    sys.exit()
 
 Base.metadata.create_all(engine)
 db = SessionLocal()
+
+if "--reset-2fa" in sys.argv:
+    name = sys.argv[sys.argv.index("--reset-2fa") + 1].strip().lower()
+    u = db.query(User).filter_by(username=name).first()
+    n = db.query(Totp).filter_by(user_id=u.id).delete() if u else 0
+    db.commit()
+    print(f"Tweestapsverificatie van '{name}' uitgezet." if n else f"Geen tweestapsverificatie gevonden voor '{name}'.")
+    sys.exit()
 
 if "--unban" in sys.argv:                      # IP-ban opheffen (de accounts zelf worden nooit geblokkeerd)
     i = sys.argv.index("--unban")
@@ -96,5 +125,15 @@ if db.query(Section).count() == 0:
     print("Dummy-inhoud aangemaakt.")
 if db.query(Post).count() == 0:
     db.add(Post(lang="nl", title="Welkom op onze nieuwe website", content="Onze nieuwe website is online! Hier vind je het lessenrooster, informatie over onze disciplines en alle contactgegevens.\n\nIn de blog delen we nieuws over lessen, stages en activiteiten."))
+    db.commit()
+if db.query(Closure).count() == 0:             # voorbeelden volgens de Vlaamse schoolvakanties: controleer en pas aan in het beheer
+    db.add_all([
+        Closure(title="Herfstvakantie", date_from=date(2026, 11, 2), date_to=date(2026, 11, 8), kind="closed",
+                note="Schoolvakantie: geen training. Vanaf maandag 9 november zijn we er weer."),
+        Closure(title="Kerstvakantie", date_from=date(2026, 12, 21), date_to=date(2027, 1, 3), kind="reduced",
+                classes="Open Dojo, Grappling No Gi*", note="Aangepast rooster tijdens de kerstvakantie: enkel deze lessen gaan door."),
+        Closure(title="Krokusvakantie", date_from=date(2027, 2, 8), date_to=date(2027, 2, 14), kind="closed", note="Schoolvakantie: geen training."),
+        Closure(title="Paasvakantie", date_from=date(2027, 3, 29), date_to=date(2027, 4, 11), kind="closed", note="Schoolvakantie: geen training."),
+    ])
     db.commit()
 print("Klaar.")

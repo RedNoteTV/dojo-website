@@ -1,0 +1,11 @@
+<div class="cal-nav">
+  <button type="button" class="btn mini" hx-get="/schedule/calendar?y={{ prev[0] }}&amp;m={{ prev[1] }}" hx-target="#cal" hx-swap="innerHTML" aria-label="‹">‹</button>
+  <strong>{{ t.months[m - 1] }} {{ y }}</strong>
+  <button type="button" class="btn mini" hx-get="/schedule/calendar?y={{ nxt[0] }}&amp;m={{ nxt[1] }}" hx-target="#cal" hx-swap="innerHTML" aria-label="›">›</button>
+</div>
+<div class="cal-grid">
+  {% for i in range(7) %}<div class="cal-h">{{ t.dshort[i] }}</div>{% endfor %}
+  {% for week in rows %}{% for c in week %}<button type="button" class="cell s-{{ c.info.status }}{{ ' other' if c.other }}{{ ' today' if c.today }}" hx-get="/schedule/day?d={{ c.day.isoformat() }}" hx-target="#day-detail" hx-swap="innerHTML" title="{{ c.info.period.title if c.info.period }}"><span>{{ c.day.day }}</span><span class="dots">{% for l in c.info.lessons %}<i class="dot k-{{ l.kind }}"></i>{% endfor %}</span></button>{% endfor %}{% endfor %}
+</div>
+<p class="legend"><span><i class="lg-c"></i>{{ t.st_closed }}</span><span><i class="lg-r"></i>{{ t.st_reduced }}</span></p>
+<div id="day-detail" aria-live="polite"><p class="hint">{{ t.cal_hint }}</p></div>

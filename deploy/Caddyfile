@@ -1,0 +1,9 @@
+# DOMAIN komt uit .env. "localhost" = lokaal testen (https://localhost:8443, eigen certificaat).
+# Een echt domein (a.be, www.a.be) = Caddy vraagt zelf een gratis Let's Encrypt-certificaat aan.
+{$DOMAIN:localhost} {
+	encode zstd gzip
+	request_body {
+		max_size 160MB
+	}
+	reverse_proxy web:8000
+}

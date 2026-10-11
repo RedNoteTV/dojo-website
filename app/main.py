@@ -1,17 +1,21 @@
 """SF Dojo – FastAPI-app: publieke site + beheerpaneel. Alle routes staan in dit bestand."""
+import calendar
 import logging
+import warnings
 import os
 import re
 import time
 from html import escape
 import secrets
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+warnings.filterwarnings("ignore", message="The httpx module is deprecated")   # ruis van Authlib, onschadelijk
+import segno
 from authlib.integrations.starlette_client import OAuth
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
@@ -19,7 +23,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import auth, crud
 from .database import Base, SessionLocal, engine, get_db
 from .i18n import LANGS, NAMES, TEXT
-from .models import Media, Post, Section, User
+from .models import Closure, Media, Post, Section, Totp, User
 
 BASE = Path(__file__).parent
 HTTPS = os.getenv("HTTPS_ONLY", "0") == "1"
@@ -28,11 +32,11 @@ if not SECRET:
     raise RuntimeError("SECRET_KEY ontbreekt: kopieer .env.example naar .env en vul die in.")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
-                    handlers=[logging.StreamHandler(), logging.FileHandler("sfdojo-events.log")])
+                    handlers=[logging.StreamHandler(), logging.FileHandler(os.getenv("LOG_FILE") or "sfdojo-events.log")])
 Base.metadata.create_all(engine)
 
 # ---- inloggen: AUTH_MODE = password | password_sso (wachtwoord + Google/Microsoft) | sso (alleen Google/Microsoft)
-AUTH_MODE = os.getenv("AUTH_MODE", "password")
+AUTH_MODE = (os.getenv("AUTH_MODE") or "auto").strip()
 PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
 oauth, PROVIDERS = OAuth(), {}
 if os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"):
@@ -59,6 +63,12 @@ def admin_emails():
     return out
 
 
+if AUTH_MODE == "auto":                    # Google/Microsoft staat uit, tot client-id, secret, adres en e-mails ingevuld zijn
+    AUTH_MODE = "password_sso" if (PROVIDERS and PUBLIC_URL and admin_emails()) else "password"
+    if PROVIDERS and AUTH_MODE == "password":
+        logging.getLogger("sfdojo").warning("Google/Microsoft is ingevuld maar PUBLIC_URL of ADMINx_EMAIL ontbreekt: SSO blijft uit.")
+USE_TOTP = AUTH_MODE == "password"         # bij Google/Microsoft-login zorgt dat account zelf voor de tweede stap
+REQUIRE_2FA = USE_TOTP and os.getenv("REQUIRE_2FA", "1") == "1"      # beheerders moeten tweestapsverificatie instellen
 if AUTH_MODE not in ("password", "password_sso", "sso"):
     raise RuntimeError("AUTH_MODE moet password, password_sso of sso zijn.")
 if AUTH_MODE != "password":                # liever meteen een duidelijke fout dan een beheer waar niemand meer in kan
@@ -70,7 +80,7 @@ if AUTH_MODE != "password":                # liever meteen een duidelijke fout d
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionMiddleware, secret_key=SECRET, session_cookie="sfdojo_session",
                    max_age=8 * 3600, same_site="lax", https_only=HTTPS)
-UPLOADS = BASE.parent / "uploads"           # geüploade foto's en video's (back-up mee nemen!)
+UPLOADS = Path(os.getenv("UPLOAD_DIR") or BASE.parent / "uploads")           # geüploade foto's en video's (back-up mee nemen!)
 UPLOADS.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 app.mount("/media", StaticFiles(directory=UPLOADS), name="media")
@@ -130,12 +140,16 @@ def kind_of(name):
     return "karate" if "karate" in n else "other"
 
 
-def today_idx():
+def today_date():
     try:
         from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Europe/Brussels")).weekday()
+        return datetime.now(ZoneInfo("Europe/Brussels")).date()
     except Exception:
-        return datetime.now().weekday()
+        return datetime.now().date()
+
+
+def today_idx():
+    return today_date().weekday()
 
 
 def schedule(text, lang):
@@ -252,6 +266,13 @@ async def need_login(request: Request, exc):
     return RedirectResponse("/admin/login", 303)
 
 
+@app.exception_handler(auth.SetupRequired)
+async def need_setup(request: Request, exc):
+    if request.headers.get("hx-request"):
+        return Response(headers={"HX-Redirect": "/admin/password?setup=1"})
+    return RedirectResponse("/admin/password?setup=1", 303)
+
+
 def get_lang(request: Request) -> str:
     q = request.query_params.get("lang")
     if q in LANGS:
@@ -308,6 +329,70 @@ def theme(set: str = ""):
     return resp
 
 
+# ---------------------------------------------------------------- lessenrooster: vakanties en kalender
+def lessons_for(db, lang):
+    for sec in crud.sections_for(db, "schedule", lang):
+        g = schedule(sec.content, lang)
+        if g:
+            return g["cards"]
+    return []
+
+
+def day_info(lessons, periods, day):
+    """Wat gebeurt er op deze dag? status: open | none (geen lessen op die weekdag) | closed | reduced."""
+    ps = [p for p in periods if p.date_from <= day <= p.date_to]
+    todays = sorted((l for l in lessons if l["d"] == day.weekday()), key=lambda l: l["start"])
+    closed = next((p for p in ps if p.kind == "closed"), None)       # 'geen training' wint van 'minder lessen'
+    if closed:
+        return dict(status="closed", period=closed, lessons=[], cancelled=todays)
+    reduced = next((p for p in ps if p.kind == "reduced"), None)
+    if reduced:
+        keys = [k.strip().lower() for k in reduced.classes.split(",") if k.strip()]
+        keep = [l for l in todays if not keys or any(k in l["name"].lower() for k in keys)]
+        return dict(status="reduced", period=reduced, lessons=keep, cancelled=[l for l in todays if l not in keep])
+    return dict(status="open" if todays else "none", period=None, lessons=todays, cancelled=[])
+
+
+def fmt_range(a, b):
+    f = lambda d: f"{d.day}/{d.month}"
+    return f(a) if a == b else f"{f(a)} – {f(b)}"
+
+
+@app.get("/schedule/calendar", response_class=HTMLResponse)
+def calendar_view(request: Request, y: int = 0, m: int = 0, db: Session = Depends(get_db)):
+    today = today_date()
+    if not (2000 <= y <= 2100 and 1 <= m <= 12):
+        y, m = today.year, today.month
+    weeks = calendar.Calendar(0).monthdatescalendar(y, m)
+    periods = db.query(Closure).filter(Closure.date_to >= weeks[0][0], Closure.date_from <= weeks[-1][-1]).all()
+    lessons = lessons_for(db, get_lang(request))
+    rows = [[dict(day=d, other=d.month != m, today=d == today, info=day_info(lessons, periods, d)) for d in w] for w in weeks]
+    return render(request, "partials/calendar.html", rows=rows, y=y, m=m,
+                  prev=(y - 1, 12) if m == 1 else (y, m - 1), nxt=(y + 1, 1) if m == 12 else (y, m + 1))
+
+
+@app.get("/schedule/day", response_class=HTMLResponse)
+def day_view(request: Request, d: str, db: Session = Depends(get_db)):
+    try:
+        day = date.fromisoformat(d)
+    except ValueError:
+        raise HTTPException(404)
+    lang = get_lang(request)
+    t = TEXT[lang]
+    periods = db.query(Closure).filter(Closure.date_from <= day, Closure.date_to >= day).all()
+    return render(request, "partials/day.html", info=day_info(lessons_for(db, lang), periods, day),
+                  title=f"{t['days'][day.weekday()]} {day.day} {t['months'][day.month - 1]} {day.year}")
+
+
+@app.get("/schedule/today", response_class=HTMLResponse)
+def today_view(request: Request, db: Session = Depends(get_db)):
+    today = today_date()
+    periods = db.query(Closure).filter(Closure.date_to >= today).order_by(Closure.date_from).limit(6).all()
+    info = day_info(lessons_for(db, get_lang(request)), periods, today)
+    upcoming = [dict(p=p, label=fmt_range(p.date_from, p.date_to), now=p.date_from <= today) for p in periods[:4]]
+    return render(request, "partials/today.html", info=info, upcoming=upcoming)
+
+
 @app.get("/blog", response_class=HTMLResponse)
 def blog(request: Request, db: Session = Depends(get_db)):
     lang = get_lang(request)
@@ -327,11 +412,31 @@ def _login_page(request, error=None):
     return render(request, "admin/login.html", mode=AUTH_MODE, providers=PROVIDERS, error=error)
 
 
-def _start_session(request, user, ip, via):
+def _has_totp(db, user):
+    t = db.get(Totp, user.id)
+    return bool(t and t.enabled)
+
+
+def _start_session(request, db, user, ip, via):
     request.session.clear()                             # nieuwe sessie na login
     request.session["uid"] = user.id
     request.session["ph"] = auth.session_mark(user)
+    if REQUIRE_2FA and not _has_totp(db, user):
+        request.session["must_2fa"] = 1                 # eerst tweestapsverificatie instellen
+    auth.clear_failures(db, ip)
     crud.log_event("login_ok", user=user.username, ip=ip, via=via)
+
+
+def _finish(request, db, user, ip, via, htmx):
+    """Laatste stap na wachtwoord/SSO: nog een 2FA-code vragen, of de sessie starten."""
+    def go(url):
+        return Response(headers={"HX-Redirect": url}) if htmx else RedirectResponse(url, 303)
+    if USE_TOTP and _has_totp(db, user):
+        request.session.clear()
+        request.session.update(totp_uid=user.id, totp_ts=int(time.time()), totp_via=via)
+        return go("/admin/2fa")
+    _start_session(request, db, user, ip, via)
+    return go("/admin/password?setup=1" if request.session.get("must_2fa") else "/admin")
 
 
 def _pending(request, db):
@@ -352,15 +457,14 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     if AUTH_MODE == "sso":
         return HTMLResponse('<span class="err">Inloggen kan alleen met Google of Microsoft.</span>')
     ip = auth.client_ip(request)
-    user, status, extra = auth.try_login(db, ip, username[:50], password[:200], clear=AUTH_MODE == "password")
+    user, status, extra = auth.try_login(db, ip, username[:50], password[:200], clear=False)
     if status == "ok":
         if AUTH_MODE == "password_sso":                 # stap 2: bevestigen met Google/Microsoft
             request.session.clear()
             request.session["pending_uid"], request.session["pending_ts"] = user.id, int(time.time())
             crud.log_event("login_password_ok", user=user.username, ip=ip)
             return Response(headers={"HX-Redirect": "/admin/sso"})
-        _start_session(request, user, ip, "password")
-        return Response(headers={"HX-Redirect": "/admin"})
+        return _finish(request, db, user, ip, "password", htmx=True)
     crud.log_event("login_fail" if status == "fail" else "login_blocked", ip=ip, user=username[:30])
     if status == "banned":
         msg = f"Te veel mislukte pogingen. Dit toestel is geblokkeerd tot {extra:%d-%m-%Y %H:%M} (UTC)."
@@ -412,9 +516,7 @@ async def sso_callback(request: Request, provider: str, db: Session = Depends(ge
         auth.record_failure(db, ip)                     # telt mee voor dezelfde IP-ban als verkeerde wachtwoorden
         crud.log_event("sso_denied", provider=provider, ip=ip, email=email[:60])
         return _login_page(request, "Dit account heeft geen toegang tot het beheer.")
-    auth.clear_failures(db, ip)
-    _start_session(request, user, ip, provider)
-    return RedirectResponse("/admin", 303)
+    return _finish(request, db, user, ip, provider, htmx=False)
 
 
 @app.post("/admin/logout", dependencies=[Depends(auth.csrf_guard)])
@@ -424,9 +526,50 @@ def logout(request: Request):
 
 
 # ---------------------------------------------------------------- beheer: wachtwoord wijzigen
+def _totp_pending(request, db):
+    uid = request.session.get("totp_uid")
+    fresh = time.time() - request.session.get("totp_ts", 0) < 600
+    return db.get(User, uid) if uid and fresh else None
+
+
+@app.get("/admin/2fa", response_class=HTMLResponse)
+def twofa_page(request: Request, db: Session = Depends(get_db)):
+    if not _totp_pending(request, db):
+        return RedirectResponse("/admin/login", 303)
+    return render(request, "admin/totp.html")
+
+
+@app.post("/admin/2fa", dependencies=[Depends(auth.csrf_guard)])
+def twofa_verify(request: Request, code: str = Form(""), db: Session = Depends(get_db)):
+    user = _totp_pending(request, db)
+    if not user:
+        return Response(headers={"HX-Redirect": "/admin/login"})
+    ip = auth.client_ip(request)
+    until = auth.banned_until(db, ip)
+    if until:
+        return HTMLResponse(f'<span class="err">Te veel mislukte pogingen. Geblokkeerd tot {until:%d-%m-%Y %H:%M} (UTC).</span>')
+    t = db.get(Totp, user.id)
+    step = auth.verify_totp(t.secret, code[:20], t.last_step)
+    if step is not None:
+        t.last_step = step
+    elif auth.use_recovery(t, code[:20]):
+        crud.log_event("2fa_recovery_used", user=user.username, ip=ip, left=len([x for x in t.recovery.split(",") if x]))
+    else:
+        status, extra = auth.record_failure(db, ip)
+        crud.log_event("2fa_fail", user=user.username, ip=ip)
+        msg = (f"Te veel mislukte pogingen. Geblokkeerd tot {extra:%d-%m-%Y %H:%M} (UTC)." if status == "banned"
+               else f"Code onjuist. Nog {extra} poging(en) voor een blokkade.")
+        return HTMLResponse(f'<span class="err">{msg}</span>')
+    db.commit()
+    _start_session(request, db, user, ip, request.session.get("totp_via", "password") + "+2fa")
+    return Response(headers={"HX-Redirect": "/admin"})
+
+
 @app.get("/admin/password", response_class=HTMLResponse)
-def password_page(request: Request, user=Depends(auth.current_user)):
-    return render(request, "admin/password.html", user=user, done=request.query_params.get("done") == "1")
+def password_page(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    return render(request, "admin/password.html", user=user, done=request.query_params.get("done") == "1",
+                  must_setup=bool(request.session.get("must_2fa")), enabled=_has_totp(db, user), require2fa=REQUIRE_2FA,
+                  use_totp=USE_TOTP, mode=AUTH_MODE)
 
 
 @app.post("/admin/password", dependencies=[Depends(auth.csrf_guard)])
@@ -441,7 +584,7 @@ def password_change(request: Request, current: str = Form(""), new: str = Form("
     if new == current:
         return err("Kies een ander wachtwoord dan het huidige.")
     ip = auth.client_ip(request)
-    _, status, extra = auth.try_login(db, ip, user.username, current)   # zelfde ban-regels als bij het inloggen
+    _, status, extra = auth.try_login(db, ip, user.username, current, clear=False)   # zelfde ban-regels als bij het inloggen
     if status == "banned":
         return err(f"Te veel mislukte pogingen. Geblokkeerd tot {extra:%d-%m-%Y %H:%M} (UTC).")
     if status != "ok":
@@ -452,6 +595,85 @@ def password_change(request: Request, current: str = Form(""), new: str = Form("
     request.session["ph"] = auth.session_mark(user)     # deze sessie blijft geldig, alle andere niet
     crud.log_event("password_changed", user=user.username, ip=ip)
     return Response(headers={"HX-Redirect": "/admin/password?done=1"})
+
+
+# ---------------------------------------------------------------- beheer: tweestapsverificatie (authenticator-app)
+def _card(request, db, user, **extra):
+    return render(request, "admin/twofa_card.html", enabled=_has_totp(db, user), require2fa=REQUIRE_2FA, **extra)
+
+
+def _setup_ctx(t, user):
+    uri = auth.otpauth_uri(t.secret, user.username)
+    qr = segno.make(uri, error="m").svg_data_uri(scale=5, border=2, dark="#000", light="#fff")   # wit vlak: scant ook in donkere modus
+    return dict(qr=qr, key=" ".join(t.secret[i:i + 4] for i in range(0, len(t.secret), 4)))
+
+
+def _pw_error(request, db, user, password):
+    _, status, extra = auth.try_login(db, auth.client_ip(request), user.username, password[:200], clear=False)
+    if status == "ok":
+        return None
+    if status == "banned":
+        return f"Te veel mislukte pogingen. Geblokkeerd tot {extra:%d-%m-%Y %H:%M} (UTC)."
+    return f"Wachtwoord klopt niet. Nog {extra} poging(en) voor een blokkade."
+
+
+@app.post("/admin/security/2fa/start", dependencies=[Depends(auth.csrf_guard)])
+def twofa_start(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    t = db.get(Totp, user.id)
+    if t and t.enabled:
+        return _card(request, db, user)
+    if not t:
+        t = Totp(user_id=user.id, secret="", enabled=False)
+        db.add(t)
+    t.secret, t.enabled, t.last_step = auth.new_totp_secret(), False, 0
+    db.commit()
+    return _card(request, db, user, setup=_setup_ctx(t, user))
+
+
+@app.post("/admin/security/2fa/confirm", dependencies=[Depends(auth.csrf_guard)])
+def twofa_confirm(request: Request, code: str = Form(""), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    t = db.get(Totp, user.id)
+    if not t or t.enabled:
+        return _card(request, db, user)
+    step = auth.verify_totp(t.secret, code[:20], 0)
+    if step is None:
+        return _card(request, db, user, setup=_setup_ctx(t, user), error="Die code klopt niet. Controleer de tijd op je telefoon en probeer opnieuw.")
+    codes = auth.new_recovery_codes()
+    t.enabled, t.last_step, t.recovery = True, step, ",".join(auth.hash_recovery(c) for c in codes)
+    db.commit()
+    request.session.pop("must_2fa", None)
+    crud.log_event("2fa_enabled", user=user.username, ip=auth.client_ip(request))
+    return _card(request, db, user, codes=codes)
+
+
+@app.post("/admin/security/2fa/recovery", dependencies=[Depends(auth.csrf_guard)])
+def twofa_recovery(request: Request, password: str = Form(""), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    t = db.get(Totp, user.id)
+    if not t or not t.enabled:
+        return _card(request, db, user)
+    err = _pw_error(request, db, user, password)
+    if err:
+        return _card(request, db, user, error=err)
+    codes = auth.new_recovery_codes()
+    t.recovery = ",".join(auth.hash_recovery(c) for c in codes)
+    db.commit()
+    crud.log_event("2fa_recovery_renewed", user=user.username)
+    return _card(request, db, user, codes=codes)
+
+
+@app.post("/admin/security/2fa/disable", dependencies=[Depends(auth.csrf_guard)])
+def twofa_disable(request: Request, password: str = Form(""), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    if REQUIRE_2FA:
+        return _card(request, db, user, error="Tweestapsverificatie is verplicht en kan niet uitgezet worden.")
+    err = _pw_error(request, db, user, password)
+    if err:
+        return _card(request, db, user, error=err)
+    t = db.get(Totp, user.id)
+    if t:
+        db.delete(t)
+        db.commit()
+    crud.log_event("2fa_disabled", user=user.username)
+    return _card(request, db, user)
 
 
 # ---------------------------------------------------------------- beheer: secties
@@ -781,3 +1003,91 @@ def post_delete(request: Request, pid: int, user=Depends(auth.current_user), db:
         db.delete(p)
         db.commit()
     return _posts(request, db, "Verwijderd.")
+
+
+# ---------------------------------------------------------------- beheer: vakanties en uitzonderingen
+KINDS = {"closed": "Geen training", "reduced": "Minder lessen (een deel gaat door)"}
+
+
+def _lesson_names(db):
+    return sorted({l["name"] for l in lessons_for(db, "nl")})
+
+
+def _closures(request, db, msg=None):
+    return render(request, "admin/closures_list.html", items=db.query(Closure).order_by(Closure.date_from.desc()).all(),
+                  msg=msg, oob=True, kinds=KINDS)
+
+
+def _closure_clean(title, date_from, date_to, kind, note, classes):
+    try:
+        a, b = date.fromisoformat(date_from), date.fromisoformat(date_to)
+    except ValueError:
+        return None, "Kies een geldige begin- en einddatum."
+    title = title.strip()[:120]
+    if not title:
+        return None, "Vul een naam in, bv. Herfstvakantie."
+    if b < a:
+        return None, "De einddatum mag niet voor de begindatum liggen."
+    if kind not in KINDS:
+        return None, "Kies een type."
+    return dict(title=title, date_from=a, date_to=b, kind=kind, note=note.strip()[:300], classes=classes.strip()[:200]), None
+
+
+@app.get("/admin/closures", response_class=HTMLResponse)
+def closures_page(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    return render(request, "admin/closures.html", user=user, items=db.query(Closure).order_by(Closure.date_from.desc()).all(),
+                  msg=None, oob=False, kinds=KINDS)
+
+
+@app.get("/admin/closures/new", response_class=HTMLResponse)
+def closure_new(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    return render(request, "admin/closure_form.html", c=None, names=_lesson_names(db))
+
+
+@app.get("/admin/closures/{cid}/edit", response_class=HTMLResponse)
+def closure_edit(request: Request, cid: int, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    c = db.get(Closure, cid)
+    if not c:
+        raise HTTPException(404)
+    return render(request, "admin/closure_form.html", c=c, names=_lesson_names(db))
+
+
+@app.post("/admin/closures", dependencies=[Depends(auth.csrf_guard)])
+def closure_create(request: Request, title: str = Form(""), date_from: str = Form(""), date_to: str = Form(""),
+                   kind: str = Form("closed"), note: str = Form(""), classes: list[str] = Form([]),
+                   user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    data, err = _closure_clean(title, date_from, date_to, kind, note, ", ".join(classes))
+    if err:
+        return _bad(err)
+    c = Closure(**data)
+    db.add(c)
+    db.commit()
+    crud.log_event("closure_created", user=user.username, id=c.id, title=c.title)
+    return _closures(request, db, "Opgeslagen. Het staat meteen in de kalender op de website.")
+
+
+@app.post("/admin/closures/{cid}", dependencies=[Depends(auth.csrf_guard)])
+def closure_update(request: Request, cid: int, title: str = Form(""), date_from: str = Form(""), date_to: str = Form(""),
+                   kind: str = Form("closed"), note: str = Form(""), classes: list[str] = Form([]),
+                   user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    c = db.get(Closure, cid)
+    if not c:
+        raise HTTPException(404)
+    data, err = _closure_clean(title, date_from, date_to, kind, note, ", ".join(classes))
+    if err:
+        return _bad(err)
+    for k, v in data.items():
+        setattr(c, k, v)
+    db.commit()
+    crud.log_event("closure_updated", user=user.username, id=cid, title=c.title)
+    return _closures(request, db, "Opgeslagen.")
+
+
+@app.delete("/admin/closures/{cid}", dependencies=[Depends(auth.csrf_guard)])
+def closure_delete(request: Request, cid: int, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    c = db.get(Closure, cid)
+    if c:
+        crud.log_event("closure_deleted", user=user.username, id=cid, title=c.title)
+        db.delete(c)
+        db.commit()
+    return _closures(request, db, "Verwijderd.")

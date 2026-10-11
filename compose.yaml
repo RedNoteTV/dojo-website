@@ -1,0 +1,62 @@
+# Starten:  podman compose up -d --build        (of: podman-compose up -d --build)
+# Wachtwoorden bij de eerste start:  podman logs sfdojo
+# Instellingen lees je uit het bestand .env (zie .env.example); zonder .env werkt alles lokaal met standaardwaarden.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Containerfile
+    image: localhost/sfdojo:latest
+    container_name: sfdojo
+    restart: always
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-}
+      HTTPS_ONLY: ${HTTPS_ONLY:-0}
+      TRUST_PROXY: "1"
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8000}
+      AUTH_MODE: ${AUTH_MODE:-}
+      REQUIRE_2FA: ${REQUIRE_2FA:-1}
+      ADMIN1_USER: ${ADMIN1_USER:-dev}
+      ADMIN2_USER: ${ADMIN2_USER:-righthand}
+      ADMIN3_USER: ${ADMIN3_USER:-leader}
+      ADMIN1_EMAIL: ${ADMIN1_EMAIL:-}
+      ADMIN2_EMAIL: ${ADMIN2_EMAIL:-}
+      ADMIN3_EMAIL: ${ADMIN3_EMAIL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_TENANT: ${MICROSOFT_TENANT:-consumers}
+      KAFKA_BROKER: ${KAFKA_BROKER:-}
+    ports:
+      - "127.0.0.1:8000:8000"          # rechtstreeks, alleen vanaf deze computer (handig voor testen)
+    volumes:
+      - sfdojo-data:/data              # database, uploads, logs en sleutel: hier staat alles wat bewaard moet worden
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  caddy:
+    image: docker.io/library/caddy:2
+    container_name: sfdojo-caddy
+    restart: always
+    depends_on:
+      - web
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      - "${HTTP_PORT:-8080}:80"        # op een server: HTTP_PORT=80 en HTTPS_PORT=443 in .env
+      - "${HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data               # hier bewaart Caddy je https-certificaten
+      - caddy-config:/config
+
+volumes:
+  sfdojo-data:
+  caddy-data:
+  caddy-config:

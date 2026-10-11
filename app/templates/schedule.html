@@ -1,5 +1,6 @@
 {% extends "page.html" %}
 {% block sections %}
+<div id="today" hx-get="/schedule/today" hx-trigger="load, every 300s" hx-swap="innerHTML"></div>
 {% for s in sections %}{% set g = schedule(s.content, lang) %}
 {% if g %}
 <section class="card"><h2>{{ s.title }}</h2>{% include "partials/schedule_grid.html" %}</section>
@@ -7,5 +8,6 @@
 <article class="card"><h2>{{ s.title }}</h2>{% with text=s.content %}{% include "partials/content.html" %}{% endwith %}</article>
 {% endif %}
 {% endfor %}
+<section class="card"><h2>{{ t.cal_title }}</h2><div id="cal" hx-get="/schedule/calendar" hx-trigger="load" hx-swap="innerHTML"></div></section>
 {% endblock %}
 {% block extra %}<p><a class="btn" href="/contact">{{ t.trial }}</a></p>{% endblock %}

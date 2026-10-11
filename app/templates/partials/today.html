@@ -1,0 +1,7 @@
+<div class="today today-{{ info.status }}">
+  <strong>{{ {'open': t.today_open, 'closed': t.today_closed, 'reduced': t.today_reduced, 'none': t.nolessons}[info.status] }}</strong>
+  {% if info.period %}<div>{{ info.period.title }}{% if info.period.note %} – {{ info.period.note }}{% endif %}</div>{% endif %}
+  {% if info.lessons %}<ul>{% for l in info.lessons %}<li><i class="dot k-{{ l.kind }}"></i> <strong>{{ l.time }}</strong> {{ l.name }}</li>{% endfor %}</ul>{% endif %}
+  {% if upcoming %}<div class="up"><strong>{{ t.upcoming }}</strong>
+    {% for u in upcoming %}<div><span class="badge b-{{ u.p.kind }}">{{ t.st_closed if u.p.kind == 'closed' else t.st_reduced }}</span> {{ u.label }} · {{ u.p.title }}{% if u.p.kind == 'reduced' and u.p.classes %} <small>({{ t.running }}: {{ u.p.classes }})</small>{% endif %}</div>{% endfor %}</div>{% endif %}
+</div>

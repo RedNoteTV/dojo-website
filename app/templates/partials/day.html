@@ -1,0 +1,8 @@
+<div class="today today-{{ info.status }}">
+  <h3 style="margin:.1rem 0 .4rem">{{ title }}</h3>
+  <span class="badge b-{{ info.status }}">{{ {'open': t.st_open, 'closed': t.st_closed, 'reduced': t.st_reduced, 'none': t.nolessons}[info.status] }}</span>
+  {% if info.period %} {{ info.period.title }}{% if info.period.note %} – {{ info.period.note }}{% endif %}{% endif %}
+  {% if info.lessons %}<ul class="dl">{% for l in info.lessons %}<li><i class="dot k-{{ l.kind }}"></i> <strong>{{ l.time }}</strong> {{ l.name }}{% if l.who %} <small>({{ l.who }})</small>{% endif %}</li>{% endfor %}</ul>
+  {% elif info.status != 'none' %}<p>{{ t.nolessons }}</p>{% endif %}
+  {% if info.cancelled %}<p class="hint">{{ t.cancelled }}: {% for l in info.cancelled %}{{ l.name }} ({{ l.time }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+</div>

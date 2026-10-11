@@ -1,0 +1,8 @@
+.env
+.venv
+.git
+__pycache__
+*.db
+uploads
+*.log
+*.zip

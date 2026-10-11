@@ -1,6 +1,12 @@
 """Login, sessies, CSRF en de escalerende IP-ban."""
+import base64
+import hashlib
+import hmac
 import os
 import secrets
+import struct
+import time
+from urllib.parse import quote
 from datetime import timedelta
 
 import bcrypt
@@ -18,6 +24,58 @@ _DUMMY = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()  # zelfde rekentijd 
 
 class LoginRequired(Exception):
     pass
+
+
+class SetupRequired(Exception):
+    """Ingelogd, maar tweestapsverificatie moet nog ingesteld worden voor de rest van het beheer."""
+
+
+def new_totp_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def _hotp(secret: str, counter: int) -> str:
+    key = base64.b32decode(secret + "=" * (-len(secret) % 8))
+    h = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    o = h[-1] & 15
+    return f"{(struct.unpack('>I', h[o:o + 4])[0] & 0x7FFFFFFF) % 10**6:06d}"
+
+
+def verify_totp(secret: str, code: str, last_step: int = 0, now=None):
+    """Controleert een 6-cijferige code (RFC 6238, SHA1, 30s, 1 blok marge). Geeft het tijdsblok of None; hergebruik wordt geweigerd."""
+    code = "".join(c for c in code if c.isdigit())
+    if len(code) != 6:
+        return None
+    step = int((now if now is not None else time.time()) // 30)
+    for s in (step - 1, step, step + 1):
+        if s > last_step and hmac.compare_digest(_hotp(secret, s), code):
+            return s
+    return None
+
+
+def otpauth_uri(secret: str, username: str, issuer: str = "SF Dojo") -> str:
+    return (f"otpauth://totp/{quote(issuer)}:{quote(username)}?secret={secret}&issuer={quote(issuer)}"
+            "&algorithm=SHA1&digits=6&period=30")
+
+
+def new_recovery_codes(n: int = 8):
+    return [f"{(h := secrets.token_hex(5))[:5]}-{h[5:]}" for _ in range(n)]
+
+
+def hash_recovery(code: str) -> str:
+    norm = "".join(c for c in code.lower() if c.isalnum())
+    return hmac.new(os.environ["SECRET_KEY"].encode(), norm.encode(), hashlib.sha256).hexdigest()
+
+
+def use_recovery(totp, code: str) -> bool:
+    """Gebruikt een herstelcode (eenmalig). Past totp.recovery aan; de aanroeper commit."""
+    h, left = hash_recovery(code), [x for x in (totp.recovery or "").split(",") if x]
+    hit = next((x for x in left if hmac.compare_digest(x, h)), None)
+    if hit is None:
+        return False
+    left.remove(hit)
+    totp.recovery = ",".join(left)
+    return True
 
 
 def _b(pw: str) -> bytes:
@@ -91,6 +149,8 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.get(User, uid) if uid else None
     if not user or request.session.get("ph") != session_mark(user):
         raise LoginRequired()
+    if request.session.get("must_2fa") and not request.url.path.startswith(("/admin/password", "/admin/security")):
+        raise SetupRequired()
     return user
 
 

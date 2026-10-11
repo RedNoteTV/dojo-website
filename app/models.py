@@ -1,7 +1,7 @@
 """Databasetabellen."""
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, String, Text
 
 from .database import Base
 
@@ -64,3 +64,25 @@ class Post(Base):
     content = Column(Text, default="")
     lang = Column(String(5), nullable=False, default="nl")
     created = Column(DateTime, default=utcnow)
+
+
+class Totp(Base):
+    """Tweestapsverificatie (authenticator-app) per beheerder. enabled pas na een geslaagde bevestiging."""
+    __tablename__ = "totp"
+    user_id = Column(Integer, primary_key=True)
+    secret = Column(String(64), nullable=False)
+    enabled = Column(Boolean, default=False)
+    last_step = Column(Integer, default=0)       # laatst gebruikte tijdsblok: een code werkt maar één keer
+    recovery = Column(Text, default="")          # hashes van de herstelcodes, komma-gescheiden
+
+
+class Closure(Base):
+    """Vakantie of uitzondering op het lessenrooster. kind: closed (geen training) | reduced (minder lessen)."""
+    __tablename__ = "closures"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(120), nullable=False)
+    date_from = Column(Date, nullable=False)
+    date_to = Column(Date, nullable=False)
+    kind = Column(String(10), nullable=False, default="closed")
+    note = Column(String(300), default="")
+    classes = Column(String(200), default="")    # bij 'reduced': lessen die WEL doorgaan (woorden uit de lesnaam, komma-gescheiden)

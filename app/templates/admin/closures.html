@@ -1,0 +1,11 @@
+{% extends "admin/layout.html" %}
+{% block title %}Vakanties{% endblock %}
+{% block content %}
+<main>
+  <h1>Vakanties en uitzonderingen</h1>
+  <div class="card"><p>Hier zet je wanneer er <strong>geen training</strong> is (bv. herfstvakantie) of <strong>minder lessen</strong> (bv. kerstvakantie). Bezoekers zien het meteen in de kalender op de pagina Lessenrooster, en bovenaan staat of er vandaag training is.</p></div>
+  <button class="btn" hx-get="/admin/closures/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuwe vakantie of uitzondering</button>
+  <div id="form-area"></div>
+  {% include "admin/closures_list.html" %}
+</main>
+{% endblock %}

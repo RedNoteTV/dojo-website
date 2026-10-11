@@ -1,0 +1,17 @@
+<div id="closures-list">
+  {% if msg %}<p class="ok" role="status">{{ msg }}</p>{% endif %}
+  {% for c in items %}
+  <div class="card item">
+    <div class="grow"><strong>{{ c.title }}</strong><br>
+      <small>{{ c.date_from.strftime('%d-%m-%Y') }}{% if c.date_to != c.date_from %} t/m {{ c.date_to.strftime('%d-%m-%Y') }}{% endif %}</small>
+      <span class="badge b-{{ c.kind }}">{{ 'Geen training' if c.kind == 'closed' else 'Minder lessen' }}</span>
+      {% if c.kind == 'reduced' and c.classes %}<br><small>Gaat door: {{ c.classes }}</small>{% endif %}
+      {% if c.note %}<br><small>{{ c.note }}</small>{% endif %}</div>
+    <div class="row">
+      <button class="btn mini" hx-get="/admin/closures/{{ c.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top">Bewerken</button>
+      <button class="btn mini danger" hx-delete="/admin/closures/{{ c.id }}" hx-confirm="Zeker weten? Dit verdwijnt uit de kalender." hx-target="#closures-list" hx-swap="outerHTML">Verwijderen</button>
+    </div>
+  </div>
+  {% else %}<p>Nog niets ingevuld: dan is er elke week gewoon training volgens het rooster.</p>{% endfor %}
+</div>
+{% if oob %}<div id="form-area" hx-swap-oob="true"></div>{% endif %}

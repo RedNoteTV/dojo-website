@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Code invoeren{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<main class="narrow">
+  <h1>Stap 2 van 2</h1>
+  <form class="card" hx-post="/admin/2fa" hx-target="#msg" hx-swap="innerHTML">
+    <label for="code">Code uit je authenticator-app</label>
+    <input id="code" name="code" autocomplete="one-time-code" maxlength="12" required autofocus>
+    <p id="msg" role="alert"></p>
+    <button class="btn" type="submit">Bevestigen</button>
+    <p class="hint">6 cijfers uit Google Authenticator, Microsoft Authenticator of Authy. Telefoon kwijt? Tik een herstelcode in (bv. ab12c-34d56). Binnen 10 minuten afronden. <a href="/admin/login">Opnieuw beginnen</a></p>
+  </form>
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

@@ -1,0 +1,24 @@
+<div class="card">
+<form id="cf" hx-post="{{ ('/admin/closures/' ~ c.id) if c else '/admin/closures' }}" hx-target="#closures-list" hx-swap="outerHTML">
+  <h2>{{ 'Bewerken' if c else 'Nieuwe vakantie of uitzondering' }}</h2>
+  <label for="c-title">Naam</label>
+  <input id="c-title" name="title" maxlength="120" required value="{{ c.title if c else '' }}" placeholder="bv. Herfstvakantie">
+  <div class="row">
+    <div><label for="c-from">Van</label><input id="c-from" type="date" name="date_from" required value="{{ c.date_from.isoformat() if c else '' }}"></div>
+    <div><label for="c-to">Tot en met</label><input id="c-to" type="date" name="date_to" required value="{{ c.date_to.isoformat() if c else '' }}"></div>
+  </div>
+  <label>Wat gebeurt er in die periode?</label>
+  <label class="check"><input type="radio" name="kind" id="k-closed" value="closed" {{ 'checked' if not c or c.kind == 'closed' }}> Geen training</label>
+  <label class="check"><input type="radio" name="kind" id="k-reduced" value="reduced" {{ 'checked' if c and c.kind == 'reduced' }}> Wel training, maar minder lessen</label>
+  <div class="cls">
+    <label>Welke lessen gaan dan wel door?</label>
+    {% for n in names %}<label class="check"><input type="checkbox" name="classes" value="{{ n }}" {{ 'checked' if c and n.lower() in c.classes.lower() }}> {{ n }}</label>{% endfor %}
+  </div>
+  <label for="c-note">Uitleg voor de bezoekers (mag leeg)</label>
+  <input id="c-note" name="note" maxlength="300" value="{{ c.note if c else '' }}" placeholder="bv. Aangepast rooster tijdens de kerstvakantie">
+</form>
+<style>form:has(#k-closed:checked) .cls{display:none}</style>
+<div id="form-msg" role="alert"></div>
+<div class="row"><button class="btn" type="submit" form="cf">Opslaan</button>
+  <button class="btn" type="button" style="background:var(--muted);color:var(--card)" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
+</div>

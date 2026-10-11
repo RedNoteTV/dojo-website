@@ -1,0 +1,40 @@
+<div id="twofa-card" class="card">
+  <h2>Tweestapsverificatie</h2>
+  {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+  {% if codes %}
+  <p class="ok">Tweestapsverificatie staat aan.</p>
+  <p><strong>Bewaar deze herstelcodes nu</strong> (foto, papier of wachtwoordmanager). Elke code werkt één keer en je ziet ze maar één keer. Telefoon kwijt? Met zo'n code kom je er weer in.</p>
+  <div class="codes">{% for c in codes %}<code>{{ c }}</code>{% endfor %}</div>
+  <a class="btn" href="/admin">Ik heb ze bewaard, naar het beheer</a>
+  {% elif setup and setup.qr %}
+  <ol class="steps">
+    <li>Installeer een authenticator-app op je telefoon: Google Authenticator, Microsoft Authenticator, Authy of 2FAS.</li>
+    <li>Kies "Account toevoegen" en scan deze QR-code.</li>
+    <li>Tik hieronder de 6 cijfers in die de app toont.</li>
+  </ol>
+  <img class="qr" src="{{ setup.qr }}" alt="QR-code om te scannen" width="200" height="200">
+  <p class="hint">Scannen lukt niet? Tik deze sleutel in de app: <code>{{ setup.key }}</code></p>
+  <form hx-post="/admin/security/2fa/confirm" hx-target="#twofa-card" hx-swap="outerHTML">
+    <label for="tc">Code uit de app</label>
+    <input id="tc" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
+    <p></p><button class="btn" type="submit">Bevestigen en aanzetten</button>
+  </form>
+  {% elif enabled %}
+  <p class="ok">Staat aan. Bij het inloggen vragen we naast je wachtwoord een code uit je app.</p>
+  <form hx-post="/admin/security/2fa/recovery" hx-target="#twofa-card" hx-swap="outerHTML">
+    <label for="rp">Nieuwe herstelcodes maken (de oude vervallen)</label>
+    <input id="rp" name="password" type="password" autocomplete="current-password" placeholder="Je wachtwoord" required>
+    <p></p><button class="btn mini" type="submit">Nieuwe herstelcodes</button>
+  </form>
+  {% if not require2fa %}
+  <form hx-post="/admin/security/2fa/disable" hx-target="#twofa-card" hx-swap="outerHTML" hx-confirm="Zeker weten? Je account is dan minder goed beveiligd.">
+    <label for="dp">Uitschakelen</label>
+    <input id="dp" name="password" type="password" autocomplete="current-password" placeholder="Je wachtwoord" required>
+    <p></p><button class="btn mini danger" type="submit">Uitschakelen</button>
+  </form>
+  {% else %}<p class="hint">Tweestapsverificatie is verplicht en kan niet uitgezet worden.</p>{% endif %}
+  {% else %}
+  <p>Met een authenticator-app op je telefoon houd je onbevoegden buiten, ook als iemand je wachtwoord raadt. Het instellen duurt een minuut.</p>
+  <button class="btn" hx-post="/admin/security/2fa/start" hx-target="#twofa-card" hx-swap="outerHTML">Instellen met QR-code</button>
+  {% endif %}
+</div>

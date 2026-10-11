@@ -67,3 +67,37 @@ Nieuwe wachtwoorden nodig? `python seed.py --reset-users`. Dummy-inhoud opnieuw 
 5. **Back-up:** elke nacht automatisch naar `/var/backups/sfdojo` (14 dagen). Handmatig: `sudo bash /opt/sfdojo/deploy/backup.sh`.
 6. Logs: `journalctl -u sfdojo -f` en `/opt/sfdojo/sfdojo-events.log` (voor Wazuh). Firewall: `SETUP_UFW=1 sudo -E bash deploy/install.sh ...` (opent alleen SSH en web).
 7. Op een VPS met ook een andere SSH-poort: eerst die poort toestaan voor je ufw aanzet.
+
+## Nieuw in v5
+**Waar staat mijn `.env`?** In de hoofdmap van het project, naast `seed.py`. Het is een verborgen bestand (begint met een punt): `ls -A` toont het, in Zed/je bestandsbeheer zet je "verborgen bestanden tonen" aan. Openen: `nano .env` of `zeditor .env`. Klaarzetten of aanvullen met nieuwe instellingen: `python seed.py --init-env` (overschrijft nooit iets).
+
+**Tweestapsverificatie met QR-code:** beheer -> Beveiliging -> *Instellen met QR-code*. Scan met Google Authenticator, Microsoft Authenticator, Authy of 2FAS. Daarna vraagt de site na het wachtwoord elke keer een code uit de app (elke code werkt één keer). Je krijgt 8 herstelcodes: bewaar ze. `REQUIRE_2FA=1` (standaard) dwingt dit af voor elke beheerder bij de volgende login. Telefoon en herstelcodes kwijt? `python seed.py --reset-2fa NAAM`.
+
+**Google/Microsoft-login** staat uit tot je client-id, secret, `PUBLIC_URL` en de `ADMINx_EMAIL`'s invult (blok 4 in `.env`): dan verschijnt na het wachtwoord de stap "Bevestigen met Google/Microsoft". `AUTH_MODE=password` zet het altijd uit (noodknop als je jezelf buitensluit). Bij die modus vervangt het Google/Microsoft-account de authenticator-stap.
+
+**Lessenrooster met vakanties:** beheer -> Vakanties. Geen training of minder lessen (vink aan welke lessen doorgaan). Bezoekers zien bovenaan of er vandaag training is, welke vakanties eraan komen en een maandkalender (klik op een dag voor de lessen). De voorbeelden volgen de Vlaamse schoolvakanties: controleer ze en pas aan.
+
+**Container (Podman):** `sudo pacman -S podman podman-compose` (Ubuntu: `sudo apt install podman podman-compose`), dan in de projectmap `podman compose up -d --build`. De eerste start maakt zelf de sleutel, database en beheerders; de wachtwoorden staan in `podman logs sfdojo`. Open `http://127.0.0.1:8000` of `https://localhost:8443`. Alles wat bewaard moet worden staat in het volume `sfdojo-data` (back-up: `podman volume export sfdojo-data -o back-up.tar`).
+**Op een server met domein:** zet in `.env`: `DOMAIN=jouwdomein.be`, `HTTPS_ONLY=1`, `PUBLIC_URL=https://jouwdomein.be`, `HTTP_PORT=80`, `HTTPS_PORT=443`, en geef rootless Podman toegang tot poort 80: `echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee /etc/sysctl.d/80-podman.conf && sudo sysctl --system`. DNS: een A-record naar de server. Dan `podman compose up -d`. Caddy regelt het https-certificaat. Laat de containers na een herstart terugkomen: `loginctl enable-linger $USER` en `systemctl --user enable --now podman-restart.service`.
+
+## Podman: aan- en uitzetten
+Altijd in de projectmap (daar staat `compose.yaml`):
+```fish
+podman compose up -d --build   # aanzetten (en opnieuw bouwen na een nieuwe versie)
+podman compose stop            # uitzetten (alles blijft bewaard)
+podman compose start           # weer aanzetten, zonder opnieuw te bouwen
+podman compose down            # containers weghalen; je gegevens blijven in het volume staan
+podman compose logs -f web     # meekijken wat er gebeurt (Ctrl+C om te stoppen)
+podman logs sfdojo | head -n 15   # de wachtwoorden van de eerste start
+podman ps                      # draait het?
+```
+Gebruik nooit `podman compose down -v`: dat wist ook je database en uploads.
+
+**Automatisch aan na het opstarten van je computer/server:** de containers hebben `restart: always`. Zet daarnaast één keer aan:
+```fish
+systemctl --user enable --now podman-restart.service
+loginctl enable-linger $USER
+```
+Uitzetten van dat automatisch starten: `systemctl --user disable --now podman-restart.service`.
+
+De container heeft zijn eigen database: de wachtwoorden en instellingen van je lokale `uvicorn`-versie gelden daar niet. Draai niet tegelijk uvicorn en de container: ze gebruiken allebei poort 8000.
