@@ -47,19 +47,8 @@ def banned_until(db: Session, ip: str):
     return b.banned_until if b and b.banned_until and b.banned_until > utcnow() else None
 
 
-def try_login(db: Session, ip: str, username: str, password: str):
-    """Geeft (user, status, extra). status: ok | fail (extra = pogingen over) | banned (extra = tot wanneer)."""
-    until = banned_until(db, ip)
-    if until:                                   # geband IP: wachtwoord wordt niet eens gecontroleerd
-        return None, "banned", until
-    user = db.query(User).filter_by(username=username.strip().lower()).first()
-    ok = bcrypt.checkpw(_b(password), (user.password_hash if user else _DUMMY).encode())
-    if user and ok:
-        b = db.get(LoginBlock, ip)
-        if b:
-            db.delete(b)
-            db.commit()
-        return user, "ok", None
+def record_failure(db: Session, ip: str):
+    """Telt een mislukte poging; na MAX_FAILS volgt een ban die telkens verdubbelt. Geeft (status, extra)."""
     b = db.get(LoginBlock, ip) or LoginBlock(ip=ip, fails=0, strikes=0)
     db.add(b)
     b.fails += 1
@@ -69,9 +58,32 @@ def try_login(db: Session, ip: str, username: str, password: str):
         hours = min(BASE_BAN_HOURS * 2 ** (b.strikes - 1), MAX_BAN_HOURS)
         b.banned_until = utcnow() + timedelta(hours=hours)
         db.commit()
-        return None, "banned", b.banned_until
+        return "banned", b.banned_until
     db.commit()
-    return None, "fail", MAX_FAILS - b.fails
+    return "fail", MAX_FAILS - b.fails
+
+
+def clear_failures(db: Session, ip: str):
+    b = db.get(LoginBlock, ip)
+    if b:
+        db.delete(b)
+        db.commit()
+
+
+def try_login(db: Session, ip: str, username: str, password: str, clear: bool = True):
+    """Geeft (user, status, extra). status: ok | fail (extra = pogingen over) | banned (extra = tot wanneer).
+    clear=False: de teller niet wissen na een goed wachtwoord (nodig als daarna nog Google/Microsoft volgt)."""
+    until = banned_until(db, ip)
+    if until:                                   # geband IP: wachtwoord wordt niet eens gecontroleerd
+        return None, "banned", until
+    user = db.query(User).filter_by(username=username.strip().lower()).first()
+    ok = bcrypt.checkpw(_b(password), (user.password_hash if user else _DUMMY).encode())
+    if user and ok:
+        if clear:
+            clear_failures(db, ip)
+        return user, "ok", None
+    status, extra = record_failure(db, ip)
+    return None, status, extra
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:

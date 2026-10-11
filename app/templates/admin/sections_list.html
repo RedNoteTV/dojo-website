@@ -4,7 +4,7 @@
   <h2 class="pg">{{ g.label }}</h2>
   {% for it in g.rows %}
   <div class="card item">
-    <div class="grow"><strong>{{ it.title }}</strong> <small>(volgorde {{ it.position }})</small></div>
+    <div class="grow"><strong>{{ it.title }}</strong> <small>(volgorde {{ it.position }})</small>{% if g.page in ('nav', 'footerlinks') and it.preview %}<br><small>link: {{ it.preview }}</small>{% endif %}</div>
     <div class="row">
       {% for l in ['nl', 'fr', 'en', 'es', 'ja'] %}{% set s = it.langs.get(l) %}
       {% if s %}<button class="chip on" hx-get="/admin/sections/{{ s.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top" title="Bewerken ({{ l|upper }})">{{ l|upper }}</button>

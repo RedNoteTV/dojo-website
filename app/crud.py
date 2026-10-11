@@ -48,8 +48,11 @@ def overview(db: Session, labels: dict):
         by_pos = {}
         for s in db.query(Section).filter(Section.page == page).order_by(Section.position, Section.id):
             by_pos.setdefault(s.position, []).append(s)
-        items = [dict(position=pos, title=(next((s for s in g if s.lang == "nl"), g[0])).title,
-                      langs={s.lang: s for s in g}) for pos, g in sorted(by_pos.items())]
+        items = []
+        for pos, g in sorted(by_pos.items()):
+            main = next((s for s in g if s.lang == "nl"), g[0])
+            items.append(dict(position=pos, title=main.title, preview=(main.content or "").strip()[:70],
+                              langs={s.lang: s for s in g}))
         out.append(dict(page=page, label=label, rows=items))
     return out
 

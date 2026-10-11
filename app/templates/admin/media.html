@@ -4,12 +4,12 @@
 <main>
   <h1>Foto's &amp; video's</h1>
   <form class="card" hx-post="/admin/media" hx-encoding="multipart/form-data" hx-target="#media-list" hx-swap="outerHTML">
-    <label for="m-file">Bestand (foto of video)</label>
-    <input id="m-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm" required>
+    <label for="m-file">Bestand (foto, video of pdf)</label>
+    <input id="m-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,application/pdf" required>
     <label for="m-cap">Onderschrift (mag leeg)</label>
     <input id="m-cap" name="caption" maxlength="200">
-    <label class="check"><input type="checkbox" name="in_hero" value="1" checked> Tonen in de slideshow bovenaan de home</label>
-    <p class="hint">Foto's tot 10 MB, video's (mp4 of webm) tot 150 MB. Het uploaden van een video kan even duren.</p>
+    <label class="check"><input type="checkbox" name="in_hero" value="1" checked> Tonen in de slideshow bovenaan de home (alleen foto's en video's)</label>
+    <p class="hint">Foto's tot 10 MB, video's (mp4 of webm) tot 150 MB, pdf tot 20 MB. Het uploaden van een video kan even duren.</p>
     <button class="btn" type="submit">Uploaden</button>
   </form>
   {% include "admin/media_list.html" %}

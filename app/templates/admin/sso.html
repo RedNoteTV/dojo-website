@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Bevestigen{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<main class="narrow">
+  <h1>Stap 2 van 2</h1>
+  <div class="card">
+    <p>Wachtwoord goed. Bevestig nu dat jij het bent met je Google- of Microsoft-account.</p>
+    {% for k, label in providers.items() %}<p><a class="btn" href="/admin/sso/{{ k }}">Doorgaan met {{ label }}</a></p>{% endfor %}
+    <p class="hint">Binnen 10 minuten afronden. <a href="/admin/login">Opnieuw beginnen</a></p>
+  </div>
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

@@ -1,0 +1,21 @@
+{# Foto's, video's en pdf's kiezen of uploaden en meteen in het tekstveld "{{ field }}" zetten. #}
+<div class="picker">
+  <strong>Foto, video of pdf toevoegen</strong>
+  <div class="strip">
+    {% for m in media_items() %}
+    <div class="pick">
+      <div class="thumb{{ ' file' if m.kind == 'file' }}">{% if m.kind == 'video' %}<video src="/media/{{ m.name }}#t=0.5" preload="metadata" muted playsinline></video>{% elif m.kind == 'file' %}📄 PDF{% else %}<img src="/media/{{ m.name }}" alt="">{% endif %}</div>
+      <small>{{ m.caption or ('Video' if m.kind == 'video' else 'PDF' if m.kind == 'file' else 'Foto') }}</small>
+      <button type="button" class="btn mini" hx-post="/admin/media/{{ m.id }}/insert" hx-include="#{{ field }}" hx-vals='{"field": "{{ field }}"}' hx-target="#{{ field }}" hx-swap="outerHTML">Invoegen</button>
+    </div>
+    {% else %}<small>Nog geen bestanden. Upload hieronder je eerste.</small>{% endfor %}
+  </div>
+  <div class="upl">
+    <label for="up-file">Nieuw bestand uploaden en meteen invoegen</label>
+    <input id="up-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,application/pdf">
+    <input id="up-cap" name="caption" maxlength="80" placeholder="Naam of onderschrift (mag leeg)">
+    <button type="button" class="btn mini" hx-post="/admin/media/upload-insert" hx-encoding="multipart/form-data" hx-include="#up-file, #up-cap, #{{ field }}" hx-vals='{"field": "{{ field }}"}' hx-target="#{{ field }}" hx-swap="outerHTML">Uploaden en invoegen</button>
+  </div>
+  <div id="pick-msg" role="status"></div>
+  <p class="hint">Het tekstje komt onderaan de tekst. Meerdere foto's na elkaar worden vanzelf een mooie galerij. Slepen kan niet: knip en plak het tekstje waar je het wil.</p>
+</div>

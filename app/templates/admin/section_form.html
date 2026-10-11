@@ -1,4 +1,5 @@
-<form class="card" hx-post="{{ ('/admin/sections/' ~ edit_id) if edit_id else '/admin/sections' }}" hx-target="#sections-list" hx-swap="outerHTML">
+<div class="card">
+<form id="sf" hx-post="{{ ('/admin/sections/' ~ edit_id) if edit_id else '/admin/sections' }}" hx-target="#sections-list" hx-swap="outerHTML">
   <h2>{{ 'Tekst bewerken' if edit_id else 'Nieuwe tekst' }}</h2>
   {% if v.note %}<p class="ok">{{ v.note }}</p>{% endif %}
   <label for="f-title">Titel</label>
@@ -12,15 +13,16 @@
       <input id="f-pos" name="position" type="number" min="0" max="999" value="{{ v.position }}"></div>
   </div>
   <p class="hint">Dezelfde volgorde in een andere taal = de vertaling van deze tekst.</p>
+  <div class="tip"><strong>Menu: extra items</strong> en <strong>Footer: extra links</strong>: zet bij Titel wat men leest (bv. Webshop) en bij Tekst alleen het adres (bv. <code>/blog</code> of <code>https://www.voorbeeld.be</code>).</div>
   <label for="f-content">Tekst</label>
-  <textarea id="f-content" name="content" rows="10">{{ v.content }}</textarea>
+  <textarea id="f-content" name="content" rows="12">{{ v.content }}</textarea>
   <p class="hint">Lege regel = nieuwe alinea. Tabel: streepjes tussen de kolommen, bv.
 Dag | Les | Uur
-Maandag | Karate | 19:00-20:00
-Foto of video erin: [foto: naam.jpg] of [video: naam.mp4] (zie Foto's &amp; video's).
-Menu- en footerlinks: Titel = wat men leest, Tekst = het adres, bv. /blog of https://...</p>
-  <div id="form-msg" role="alert"></div>
-  <div class="row"><button class="btn" type="submit">Opslaan</button>
+Maandag | Karate | 19:00-20:00</p>
+</form>
+{% with field='f-content' %}{% include "admin/media_picker.html" %}{% endwith %}
+<div id="form-msg" role="alert"></div>
+<div class="row"><button class="btn" type="submit" form="sf">Opslaan</button>
   {% if edit_id %}<button class="btn danger" type="button" hx-delete="/admin/sections/{{ edit_id }}" hx-confirm="Zeker weten? Dit verdwijnt meteen van de website." hx-target="#sections-list" hx-swap="outerHTML">Verwijderen</button>{% endif %}
   <button class="btn" type="button" style="background:var(--muted);color:var(--card)" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
-</form>
+</div>

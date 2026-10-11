@@ -2,6 +2,8 @@
 import logging
 import os
 import re
+import time
+from html import escape
 import secrets
 from datetime import datetime
 from pathlib import Path
@@ -10,13 +12,14 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from authlib.integrations.starlette_client import OAuth
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth, crud
 from .database import Base, SessionLocal, engine, get_db
 from .i18n import LANGS, NAMES, TEXT
-from .models import Media, Post, Section
+from .models import Media, Post, Section, User
 
 BASE = Path(__file__).parent
 HTTPS = os.getenv("HTTPS_ONLY", "0") == "1"
@@ -27,6 +30,42 @@ if not SECRET:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
                     handlers=[logging.StreamHandler(), logging.FileHandler("sfdojo-events.log")])
 Base.metadata.create_all(engine)
+
+# ---- inloggen: AUTH_MODE = password | password_sso (wachtwoord + Google/Microsoft) | sso (alleen Google/Microsoft)
+AUTH_MODE = os.getenv("AUTH_MODE", "password")
+PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
+oauth, PROVIDERS = OAuth(), {}
+if os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"):
+    oauth.register("google", client_id=os.environ["GOOGLE_CLIENT_ID"], client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+                   server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+                   client_kwargs={"scope": "openid email", "code_challenge_method": "S256"})
+    PROVIDERS["google"] = "Google"
+if os.getenv("MICROSOFT_CLIENT_ID") and os.getenv("MICROSOFT_CLIENT_SECRET"):
+    tenant = os.getenv("MICROSOFT_TENANT", "consumers")        # 'consumers' = privé-accounts, of de tenant-id van een werkaccount
+    oauth.register("microsoft", client_id=os.environ["MICROSOFT_CLIENT_ID"], client_secret=os.environ["MICROSOFT_CLIENT_SECRET"],
+                   server_metadata_url=f"https://login.microsoftonline.com/{tenant}/v2.0/.well-known/openid-configuration",
+                   client_kwargs={"scope": "openid email profile", "code_challenge_method": "S256"})
+    PROVIDERS["microsoft"] = "Microsoft"
+
+
+def admin_emails():
+    """E-mailadres -> gebruikersnaam, uit ADMIN1_EMAIL.. (per beheerder mag je meerdere adressen scheiden met een komma)."""
+    out = {}
+    for i, default in ((1, "dev"), (2, "righthand"), (3, "leader")):
+        name = os.getenv(f"ADMIN{i}_USER", default).strip().lower()
+        for e in os.getenv(f"ADMIN{i}_EMAIL", "").split(","):
+            if e.strip():
+                out[e.strip().lower()] = name
+    return out
+
+
+if AUTH_MODE not in ("password", "password_sso", "sso"):
+    raise RuntimeError("AUTH_MODE moet password, password_sso of sso zijn.")
+if AUTH_MODE != "password":                # liever meteen een duidelijke fout dan een beheer waar niemand meer in kan
+    missing = [t for t, ok in (("GOOGLE_* of MICROSOFT_* (client id en secret)", PROVIDERS), ("PUBLIC_URL", PUBLIC_URL),
+                               ("ADMIN1_EMAIL / ADMIN2_EMAIL / ADMIN3_EMAIL", admin_emails())) if not ok]
+    if missing:
+        raise RuntimeError(f"AUTH_MODE={AUTH_MODE} maar in .env ontbreekt: {', '.join(missing)}")
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(SessionMiddleware, secret_key=SECRET, session_cookie="sfdojo_session",
@@ -47,26 +86,28 @@ PAGE_LABELS = {"home": "Home", "about": "Over ons", "disciplines": "Disciplines"
 THEMES = ["", "light", "dark"]          # "" = automatisch (volgt het toestel)
 
 
-MEDIA_RE = re.compile(r"^\[(foto|video):\s*([0-9a-f]{16}\.(?:jpg|png|gif|webp|mp4|webm))\]$")
+MEDIA_RE = re.compile(r"^\[(foto|video|bestand):\s*([0-9a-f]{16}\.(?:jpg|png|gif|webp|mp4|webm|pdf))(?:\s+([^\[\]|]{1,80}))?\]$")
 
 
 def blocks(text):
-    """Tekst -> alinea's. Een alinea waarvan elke regel '|' bevat wordt een tabel."""
+    """Tekst -> blokken. Regels met '|' = tabel; [foto: x] / [video: x] / [bestand: x] = media (opeenvolgend = galerij)."""
     out = []
     for para in (text or "").replace("\r", "").split("\n\n"):
-        m = MEDIA_RE.match(para.strip())          # [foto: naam.jpg] / [video: naam.mp4]
-        if m:
-            out.append({"media": m.groups()})
-            continue
         lines = [l for l in para.split("\n") if l.strip()]
         if not lines:
             continue
-        if all("|" in l for l in lines):
+        ms = [MEDIA_RE.match(l.strip()) for l in lines]
+        if all(ms):
+            items = [m.groups() for m in ms]
+            if out and "media" in out[-1]:
+                out[-1]["media"] += items
+            else:
+                out.append({"media": items})
+        elif all("|" in l for l in lines):
             out.append({"rows": [[c.strip() for c in l.split("|")] for l in lines]})
         else:
             out.append({"text": "\n".join(lines)})
     return out
-
 
 
 # ---- lessenrooster: tabel "Dag | Uur | Les | Voor wie" wordt een weekraster
@@ -145,14 +186,32 @@ def footer_links():
         db.close()
 
 
+def normalize_link(u):
+    """Maakt van wat de beheerder typt een veilig adres: /blog, blog, www.x.be, https://..., mailto:, tel:."""
+    u = (u or "").strip()
+    if not u or any(c in u for c in ' <>"\''):
+        return None
+    if u.startswith("/"):
+        return None if u.startswith("//") else u
+    if u.lower().startswith(("https://", "http://", "mailto:", "tel:")):
+        return u
+    if ":" in u:                                   # javascript:, data:, ...
+        return None
+    if "@" in u and "/" not in u:
+        return "mailto:" + u
+    if "." in u.split("/")[0]:
+        return "https://" + u
+    return "/" + u
+
+
 def link_items(page, lang):
     """Extra menu-/footerlinks uit de database: titel = tekst, inhoud = adres (/pad of https://...)."""
     db = SessionLocal()
     try:
         out = []
         for s in crud.sections_for(db, page, lang):
-            u = s.content.strip()
-            if (u.startswith("/") and not u.startswith("//")) or u.lower().startswith(("https://", "http://")):
+            u = normalize_link(s.content)
+            if u:
                 out.append((s.title, u))
         return out[:10]
     finally:
@@ -264,21 +323,43 @@ def blog_post(request: Request, pid: int, db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------- beheer: login
+def _login_page(request, error=None):
+    return render(request, "admin/login.html", mode=AUTH_MODE, providers=PROVIDERS, error=error)
+
+
+def _start_session(request, user, ip, via):
+    request.session.clear()                             # nieuwe sessie na login
+    request.session["uid"] = user.id
+    request.session["ph"] = auth.session_mark(user)
+    crud.log_event("login_ok", user=user.username, ip=ip, via=via)
+
+
+def _pending(request, db):
+    """Gebruiker die het wachtwoord al goed had en nu nog Google/Microsoft moet bevestigen (max. 10 minuten)."""
+    uid = request.session.get("pending_uid")
+    fresh = time.time() - request.session.get("pending_ts", 0) < 600
+    return db.get(User, uid) if uid and fresh else None
+
+
 @app.get("/admin/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    return render(request, "admin/login.html")
+    return _login_page(request)
 
 
 @app.post("/admin/login", dependencies=[Depends(auth.csrf_guard)])
 def login(request: Request, username: str = Form(""), password: str = Form(""),
           db: Session = Depends(get_db)):
+    if AUTH_MODE == "sso":
+        return HTMLResponse('<span class="err">Inloggen kan alleen met Google of Microsoft.</span>')
     ip = auth.client_ip(request)
-    user, status, extra = auth.try_login(db, ip, username[:50], password[:200])
+    user, status, extra = auth.try_login(db, ip, username[:50], password[:200], clear=AUTH_MODE == "password")
     if status == "ok":
-        request.session.clear()                         # nieuwe sessie na login
-        request.session["uid"] = user.id
-        request.session["ph"] = auth.session_mark(user)
-        crud.log_event("login_ok", user=user.username, ip=ip)
+        if AUTH_MODE == "password_sso":                 # stap 2: bevestigen met Google/Microsoft
+            request.session.clear()
+            request.session["pending_uid"], request.session["pending_ts"] = user.id, int(time.time())
+            crud.log_event("login_password_ok", user=user.username, ip=ip)
+            return Response(headers={"HX-Redirect": "/admin/sso"})
+        _start_session(request, user, ip, "password")
         return Response(headers={"HX-Redirect": "/admin"})
     crud.log_event("login_fail" if status == "fail" else "login_blocked", ip=ip, user=username[:30])
     if status == "banned":
@@ -286,6 +367,54 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
     else:
         msg = f"Onjuiste gebruikersnaam of wachtwoord. Nog {extra} poging(en) voor een blokkade."
     return HTMLResponse(f'<span class="err">{msg}</span>')   # status 200 zodat HTMX het toont
+
+
+@app.get("/admin/sso", response_class=HTMLResponse)
+def sso_step(request: Request, db: Session = Depends(get_db)):
+    if AUTH_MODE != "password_sso" or not _pending(request, db):
+        return RedirectResponse("/admin/login", 303)
+    return render(request, "admin/sso.html", providers=PROVIDERS)
+
+
+@app.get("/admin/sso/{provider}")
+async def sso_start(request: Request, provider: str, db: Session = Depends(get_db)):
+    if AUTH_MODE == "password" or provider not in PROVIDERS:
+        raise HTTPException(404)
+    if AUTH_MODE == "password_sso" and not _pending(request, db):
+        return RedirectResponse("/admin/login", 303)
+    if auth.banned_until(db, auth.client_ip(request)):
+        return _login_page(request, "Dit toestel is geblokkeerd. Probeer het later opnieuw.")
+    return await oauth.create_client(provider).authorize_redirect(request, f"{PUBLIC_URL}/admin/sso/{provider}/callback")
+
+
+@app.get("/admin/sso/{provider}/callback")
+async def sso_callback(request: Request, provider: str, db: Session = Depends(get_db)):
+    if AUTH_MODE == "password" or provider not in PROVIDERS:
+        raise HTTPException(404)
+    ip = auth.client_ip(request)
+    if auth.banned_until(db, ip):
+        return _login_page(request, "Dit toestel is geblokkeerd. Probeer het later opnieuw.")
+    pending = _pending(request, db) if AUTH_MODE == "password_sso" else None
+    if AUTH_MODE == "password_sso" and not pending:
+        return RedirectResponse("/admin/login", 303)
+    try:                                                # controleert state, PKCE, handtekening en nonce van het id-token
+        token = await oauth.create_client(provider).authorize_access_token(request)
+    except Exception as exc:
+        crud.log_event("sso_error", provider=provider, ip=ip, error=type(exc).__name__)
+        return _login_page(request, "Inloggen met Google of Microsoft is mislukt. Probeer het opnieuw.")
+    claims = token.get("userinfo") or {}
+    email = str(claims.get("email") or claims.get("preferred_username") or "").strip().lower()
+    if provider == "google" and claims.get("email_verified") is not True:
+        email = ""
+    name = admin_emails().get(email)
+    user = db.query(User).filter_by(username=name).first() if name else None
+    if not user or (pending and pending.id != user.id):
+        auth.record_failure(db, ip)                     # telt mee voor dezelfde IP-ban als verkeerde wachtwoorden
+        crud.log_event("sso_denied", provider=provider, ip=ip, email=email[:60])
+        return _login_page(request, "Dit account heeft geen toegang tot het beheer.")
+    auth.clear_failures(db, ip)
+    _start_session(request, user, ip, provider)
+    return RedirectResponse("/admin", 303)
 
 
 @app.post("/admin/logout", dependencies=[Depends(auth.csrf_guard)])
@@ -341,6 +470,10 @@ def _clean(db, sid, page, lang, title, content, position):
     if page not in PAGE_LABELS or lang not in (*LANGS, "all") or not title:
         return None, "Vul een titel in en kies een geldige pagina en taal."
     position = max(0, min(position, 999))
+    if page in ("nav", "footerlinks"):
+        content = normalize_link(content)
+        if not content:
+            return None, "Bij Tekst moet een adres staan, bv. /blog of https://www.voorbeeld.be"
     same = db.query(Section).filter(Section.page == page, Section.lang == lang)
     if same.filter(Section.position == position, Section.id != (sid or 0)).first():
         return None, f"Volgorde {position} is al in gebruik voor deze pagina en taal. Kies bv. {max(x.position for x in same) + 1}."
@@ -429,9 +562,9 @@ def delete_section(request: Request, sid: int, user=Depends(auth.current_user), 
     return _list(request, db, "Verwijderd.")
 
 
-# ---------------------------------------------------------------- beheer: media (foto's en video's)
+# ---------------------------------------------------------------- beheer: media (foto's, video's, pdf)
 def sniff(head: bytes):
-    """Bestandstype uit de eerste bytes (niet uit de naam). SVG is bewust niet toegestaan."""
+    """Bestandstype uit de eerste bytes (niet uit de naam). SVG en andere types zijn bewust niet toegestaan."""
     if head.startswith(b"\xff\xd8\xff"):
         return "jpg", "image"
     if head.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -444,7 +577,69 @@ def sniff(head: bytes):
         return "mp4", "video"
     if head.startswith(b"\x1a\x45\xdf\xa3"):
         return "webm", "video"
+    if head.startswith(b"%PDF-"):
+        return "pdf", "file"
     return None
+
+
+LIMITS_MB = {"image": 10, "video": 150, "file": 20}
+
+
+async def _store(file):
+    """Slaat een upload veilig op. Geeft (info, None) of (None, foutmelding)."""
+    head = await file.read(16)
+    kind = sniff(head)
+    if not kind:
+        return None, "Dit bestandstype mag niet. Toegestaan: jpg, png, gif, webp, mp4, webm en pdf."
+    ext, typ = kind
+    limit = LIMITS_MB[typ] << 20
+    name = f"{secrets.token_hex(8)}.{ext}"
+    path = UPLOADS / name
+    size, too_big = len(head), False
+    with open(path, "wb") as f:
+        f.write(head)
+        while chunk := await file.read(1 << 20):
+            size += len(chunk)
+            if size > limit:
+                too_big = True
+                break
+            f.write(chunk)
+    if too_big:
+        path.unlink(missing_ok=True)
+        return None, f"Het bestand is te groot (maximaal {LIMITS_MB[typ]} MB voor dit type)."
+    return dict(name=name, kind=typ, size=size), None
+
+
+def media_tag(m):
+    """Het tekstje dat je in een tekst of blogbericht zet om dit bestand te tonen."""
+    if m.kind == "file":
+        label = re.sub(r"[\[\]|]", "", m.caption or "").strip()[:80]
+        return f"[bestand: {m.name}" + (f" {label}" if label else "") + "]"
+    return f"[{'video' if m.kind == 'video' else 'foto'}: {m.name}]"
+
+
+def media_items():
+    db = SessionLocal()
+    try:
+        return db.query(Media).order_by(Media.id.desc()).limit(30).all()
+    finally:
+        db.close()
+
+
+templates.env.globals.update(media_tag=media_tag, media_items=media_items)
+PICK_FIELDS = ("f-content", "p-content")
+
+
+def _textarea(field, content, msg, ok=True):
+    """Vervangt het tekstveld door een versie met het mediatekstje erin (puur HTMX, geen JavaScript)."""
+    field = field if field in PICK_FIELDS else PICK_FIELDS[0]
+    cls = "ok" if ok else "err"
+    return HTMLResponse(f'<textarea id="{field}" name="content" rows="12">{escape(content)}</textarea>'
+                        f'<div id="pick-msg" hx-swap-oob="true" role="status" class="{cls}">{escape(msg)}</div>')
+
+
+def _append(content, tag):
+    return (content.rstrip() + "\n\n" if content.strip() else "") + tag
 
 
 def _media(request, db, msg=None, ok=True):
@@ -460,30 +655,41 @@ def media_page(request: Request, user=Depends(auth.current_user), db: Session = 
 @app.post("/admin/media", dependencies=[Depends(auth.csrf_guard)])
 async def media_upload(request: Request, file: UploadFile = File(...), caption: str = Form(""), in_hero: str = Form(""),
                        user=Depends(auth.current_user), db: Session = Depends(get_db)):
-    head = await file.read(16)
-    kind = sniff(head)
-    if not kind:
-        return _media(request, db, "Dit bestandstype mag niet. Kies een jpg, png, gif, webp, mp4 of webm.", False)
-    ext, typ = kind
-    limit = (10 if typ == "image" else 150) << 20
-    name = f"{secrets.token_hex(8)}.{ext}"
-    path = UPLOADS / name
-    size, too_big = len(head), False
-    with open(path, "wb") as f:
-        f.write(head)
-        while chunk := await file.read(1 << 20):
-            size += len(chunk)
-            if size > limit:
-                too_big = True
-                break
-            f.write(chunk)
-    if too_big:
-        path.unlink(missing_ok=True)
-        return _media(request, db, f"Het bestand is te groot (maximaal {limit >> 20} MB).", False)
-    db.add(Media(name=name, kind=typ, caption=caption.strip()[:200], in_hero=bool(in_hero)))
+    info, err = await _store(file)
+    if err:
+        return _media(request, db, err, False)
+    db.add(Media(name=info["name"], kind=info["kind"], caption=caption.strip()[:200],
+                 in_hero=bool(in_hero) and info["kind"] != "file"))
     db.commit()
-    crud.log_event("media_uploaded", user=user.username, name=name, kind=typ, size=size)
+    crud.log_event("media_uploaded", user=user.username, **info)
     return _media(request, db, "Geüpload.")
+
+
+@app.post("/admin/media/upload-insert", dependencies=[Depends(auth.csrf_guard)])
+async def media_upload_insert(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    """Upload vanuit het tekst-/blogformulier: bewaart het bestand en zet het tekstje meteen onderaan de tekst."""
+    form = await request.form()
+    content, field, caption = str(form.get("content", "")), str(form.get("field", "")), str(form.get("caption", ""))
+    file = form.get("file")
+    if not hasattr(file, "read") or not getattr(file, "filename", ""):
+        return _textarea(field, content, "Kies eerst een bestand.", False)
+    info, err = await _store(file)
+    if err:
+        return _textarea(field, content, err, False)
+    m = Media(name=info["name"], kind=info["kind"], caption=caption.strip()[:200], in_hero=False)
+    db.add(m)
+    db.commit()
+    crud.log_event("media_uploaded", user=user.username, **info)
+    return _textarea(field, _append(content, media_tag(m)), "Geüpload en ingevoegd onderaan de tekst.")
+
+
+@app.post("/admin/media/{mid}/insert", dependencies=[Depends(auth.csrf_guard)])
+def media_insert(mid: int, content: str = Form(""), field: str = Form(""),
+                 user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    m = db.get(Media, mid)
+    if not m:
+        raise HTTPException(404)
+    return _textarea(field, _append(content, media_tag(m)), "Ingevoegd onderaan de tekst.")
 
 
 @app.post("/admin/media/{mid}/hero", dependencies=[Depends(auth.csrf_guard)])

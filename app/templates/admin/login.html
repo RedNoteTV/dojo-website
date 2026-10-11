@@ -4,14 +4,23 @@
 {% block content %}
 <main class="narrow">
   <h1>SF Dojo – Beheer</h1>
+  {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+  {% if mode != 'sso' %}
   <form class="card" hx-post="/admin/login" hx-target="#msg" hx-swap="innerHTML">
     <label for="u">Gebruikersnaam</label>
     <input id="u" name="username" autocomplete="username" autocapitalize="none" required autofocus>
     <label for="p">Wachtwoord</label>
     <input id="p" name="password" type="password" autocomplete="current-password" required>
     <p id="msg" role="alert"></p>
-    <button class="btn" type="submit">Inloggen</button>
+    <button class="btn" type="submit">{{ 'Volgende stap' if mode == 'password_sso' else 'Inloggen' }}</button>
+    {% if mode == 'password_sso' %}<p class="hint">Daarna bevestig je met Google of Microsoft.</p>{% endif %}
   </form>
+  {% else %}
+  <div class="card">
+    <p>Log in met je Google- of Microsoft-account.</p>
+    {% for k, label in providers.items() %}<p><a class="btn" href="/admin/sso/{{ k }}">Doorgaan met {{ label }}</a></p>{% endfor %}
+  </div>
+  {% endif %}
 </main>
 {% endblock %}
 {% block footer %}{% endblock %}
