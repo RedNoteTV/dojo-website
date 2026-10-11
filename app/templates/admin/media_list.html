@@ -1,0 +1,15 @@
+<div id="media-list">
+  {% if msg %}<p class="{{ 'ok' if ok else 'err' }}" role="status">{{ msg }}</p>{% endif %}
+  {% for m in items %}
+  <div class="card item">
+    <div class="thumb">{% if m.kind == 'video' %}<video src="/media/{{ m.name }}#t=0.5" preload="metadata" muted playsinline></video>{% else %}<img src="/media/{{ m.name }}" alt="">{% endif %}</div>
+    <div class="grow"><strong>{{ m.caption or ('Video' if m.kind == 'video' else 'Foto') }}</strong><br>
+      <small>{{ 'In de slideshow' if m.in_hero else 'Niet in de slideshow' }}</small><br>
+      <small>In een tekst of blogbericht zetten: <code>[{{ 'video' if m.kind == 'video' else 'foto' }}: {{ m.name }}]</code></small></div>
+    <div class="row">
+      <button class="btn mini" hx-post="/admin/media/{{ m.id }}/hero" hx-target="#media-list" hx-swap="outerHTML">{{ 'Uit slideshow' if m.in_hero else 'In slideshow' }}</button>
+      <button class="btn mini danger" hx-delete="/admin/media/{{ m.id }}" hx-confirm="Zeker weten? Dit bestand wordt gewist." hx-target="#media-list" hx-swap="outerHTML">Verwijderen</button>
+    </div>
+  </div>
+  {% else %}<p>Nog geen bestanden. Zonder uploads toont de home de voorbeeld-slides.</p>{% endfor %}
+</div>

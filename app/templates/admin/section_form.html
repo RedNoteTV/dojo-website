@@ -1,21 +1,26 @@
-<form class="card" hx-post="{{ ('/admin/sections/' ~ s.id) if s else '/admin/sections' }}" hx-target="#sections-list" hx-swap="outerHTML">
-  <h2>{{ 'Sectie bewerken' if s else 'Nieuwe sectie' }}</h2>
+<form class="card" hx-post="{{ ('/admin/sections/' ~ edit_id) if edit_id else '/admin/sections' }}" hx-target="#sections-list" hx-swap="outerHTML">
+  <h2>{{ 'Tekst bewerken' if edit_id else 'Nieuwe tekst' }}</h2>
+  {% if v.note %}<p class="ok">{{ v.note }}</p>{% endif %}
   <label for="f-title">Titel</label>
-  <input id="f-title" name="title" maxlength="200" required value="{{ s.title if s else '' }}">
+  <input id="f-title" name="title" maxlength="200" required value="{{ v.title }}">
   <div class="row">
     <div><label for="f-page">Pagina</label>
-      <select id="f-page" name="page">{% for p, label in page_labels.items() %}<option value="{{ p }}" {{ 'selected' if s and s.page == p }}>{{ label }}</option>{% endfor %}</select></div>
+      <select id="f-page" name="page">{% for p, label in page_labels.items() %}<option value="{{ p }}" {{ 'selected' if v.page == p }}>{{ label }}</option>{% endfor %}</select></div>
     <div><label for="f-lang">Taal</label>
-      <select id="f-lang" name="lang">{% for l in ['nl','fr','en','es','ja','all'] %}<option value="{{ l }}" {{ 'selected' if s and s.lang == l }}>{{ l }}{{ ' (alle talen)' if l == 'all' }}</option>{% endfor %}</select></div>
+      <select id="f-lang" name="lang">{% for l in ['nl','fr','en','es','ja','all'] %}<option value="{{ l }}" {{ 'selected' if v.lang == l }}>{{ l|upper }}{{ ' (alle talen)' if l == 'all' }}</option>{% endfor %}</select></div>
     <div><label for="f-pos">Volgorde</label>
-      <input id="f-pos" name="position" type="number" min="0" max="999" value="{{ s.position if s else 0 }}"></div>
+      <input id="f-pos" name="position" type="number" min="0" max="999" value="{{ v.position }}"></div>
   </div>
+  <p class="hint">Dezelfde volgorde in een andere taal = de vertaling van deze tekst.</p>
   <label for="f-content">Tekst</label>
-  <textarea id="f-content" name="content" rows="10">{{ s.content if s else '' }}</textarea>
-  <p class="hint">Lege regel = nieuwe alinea. Een tabel maak je met streepjes tussen de kolommen, bv.
+  <textarea id="f-content" name="content" rows="10">{{ v.content }}</textarea>
+  <p class="hint">Lege regel = nieuwe alinea. Tabel: streepjes tussen de kolommen, bv.
 Dag | Les | Uur
-Maandag | Karate | 19:00-20:00</p>
+Maandag | Karate | 19:00-20:00
+Foto of video erin: [foto: naam.jpg] of [video: naam.mp4] (zie Foto's &amp; video's).
+Menu- en footerlinks: Titel = wat men leest, Tekst = het adres, bv. /blog of https://...</p>
   <div id="form-msg" role="alert"></div>
   <div class="row"><button class="btn" type="submit">Opslaan</button>
-  <button class="btn danger" type="button" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
+  {% if edit_id %}<button class="btn danger" type="button" hx-delete="/admin/sections/{{ edit_id }}" hx-confirm="Zeker weten? Dit verdwijnt meteen van de website." hx-target="#sections-list" hx-swap="outerHTML">Verwijderen</button>{% endif %}
+  <button class="btn" type="button" style="background:var(--muted);color:var(--card)" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
 </form>

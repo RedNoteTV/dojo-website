@@ -1,0 +1,13 @@
+<form class="card" hx-post="{{ ('/admin/blog/' ~ p.id) if p else '/admin/blog' }}" hx-target="#posts-list" hx-swap="outerHTML">
+  <h2>{{ 'Bericht bewerken' if p else 'Nieuw bericht' }}</h2>
+  <label for="p-title">Titel</label>
+  <input id="p-title" name="title" maxlength="200" required value="{{ p.title if p else '' }}">
+  <label for="p-lang">Taal</label>
+  <select id="p-lang" name="lang">{% for l in ['nl','fr','en','es','ja','all'] %}<option value="{{ l }}" {{ 'selected' if p and p.lang == l }}>{{ l|upper }}{{ ' (alle talen)' if l == 'all' }}</option>{% endfor %}</select>
+  <label for="p-content">Tekst</label>
+  <textarea id="p-content" name="content" rows="12">{{ p.content if p else '' }}</textarea>
+  <p class="hint">Lege regel = nieuwe alinea. Foto of video erin: [foto: naam.jpg] of [video: naam.mp4] (zie Foto's &amp; video's).</p>
+  <div id="form-msg" role="alert"></div>
+  <div class="row"><button class="btn" type="submit">Opslaan</button>
+  <button class="btn" type="button" style="background:var(--muted);color:var(--card)" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
+</form>

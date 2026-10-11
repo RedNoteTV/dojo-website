@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<main>
+  <h1>{{ title }}</h1>
+  {% for p in posts %}
+  <article class="card"><small class="muted">{{ p.created.strftime('%d-%m-%Y') }}</small>
+    <h2><a href="/blog/{{ p.id }}">{{ p.title }}</a></h2>
+    <p>{{ excerpt(p.content) }}</p>
+    <a href="/blog/{{ p.id }}">{{ t.more }}</a></article>
+  {% else %}<p>{{ t.noposts }}</p>{% endfor %}
+</main>
+{% endblock %}

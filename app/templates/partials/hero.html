@@ -1,6 +1,7 @@
-<div id="hero" class="slide" hx-get="/hero/slide/{{ (idx + 1) % total }}" hx-trigger="every 7s" hx-swap="outerHTML">
-  <img src="/static/images/{{ slide.filename }}" alt="{{ slide.caption }}">
-  <div class="cap">{{ slide.caption }}</div>
+<div id="hero" class="slide"{% if slide.kind != 'video' %} hx-get="/hero/slide/{{ (idx + 1) % total }}" hx-trigger="every 7s" hx-swap="outerHTML"{% endif %}>
+  {% if slide.kind == 'video' %}<video src="{{ slide.url }}" autoplay muted loop playsinline></video>
+  {% else %}<img src="{{ slide.url }}" alt="{{ slide.caption }}">{% endif %}
+  {% if slide.caption %}<div class="cap">{{ slide.caption }}</div>{% endif %}
   {% if total > 1 %}
   <button class="nav prev" hx-get="/hero/slide/{{ (idx - 1) % total }}" hx-target="#hero" hx-swap="outerHTML" aria-label="{{ t.prev }}" title="{{ t.prev }}">‹</button>
   <button class="nav next" hx-get="/hero/slide/{{ (idx + 1) % total }}" hx-target="#hero" hx-swap="outerHTML" aria-label="{{ t.next }}" title="{{ t.next }}">›</button>

@@ -1,10 +1,13 @@
 {% extends "base.html" %}
 {% block header %}
 <header><div class="bar">
-  <a class="brand" href="/admin">SF Dojo – Beheer</a>
+  <a class="brand" href="/admin" style="color:var(--paper)">SF Dojo – Beheer</a>
   <span class="row">
-    <a class="btn mini" href="/" target="_blank" rel="noopener">Website bekijken</a>
-    <a class="btn mini" href="/admin/password">Wachtwoord wijzigen</a>
+    <a class="btn mini" href="/admin">Teksten</a>
+    <a class="btn mini" href="/admin/blog">Blog</a>
+    <a class="btn mini" href="/admin/media">Foto's &amp; video's</a>
+    <a class="btn mini" href="/admin/password">Wachtwoord</a>
+    <a class="btn mini" href="/" target="_blank" rel="noopener">Website</a>
     <button class="btn mini" hx-post="/admin/logout">Uitloggen ({{ user.username }})</button>
   </span>
 </div></header>

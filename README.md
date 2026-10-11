@@ -41,3 +41,11 @@ Nieuwe wachtwoorden nodig? `python seed.py --reset-users`. Dummy-inhoud opnieuw 
 - Altijd HTTPS (nginx/Caddy + Let's Encrypt), `HTTPS_ONLY=1`, `TRUST_PROXY=1`, sterke `SECRET_KEY`.
 - Draai met `uvicorn app.main:app --host 127.0.0.1 --port 8000` achter de reverse proxy (bv. via systemd).
 - Back-up = bestand `sfdojo.db` kopiëren.
+
+## Nieuw in deze versie
+- **Vertalen via het beheer:** bij "Teksten" zie je per tekst de knoppen NL FR EN ES JA. Een knop met `+` = nog geen vertaling: klik, vertaal, sla op. Zonder vertaling toont de site per tekst het Nederlands.
+- **Menu en footer uitbreiden:** pagina's "Menu: extra items" en "Footer: extra links" (Titel = tekst, Tekst = adres, bv. `/blog` of `https://...`). Social media staat onder "Footer: social media" (`TikTok | https://...`).
+- **Blog:** menu "Blog" in het beheer. Berichten staan op `/blog`.
+- **Foto's en video's:** menu "Foto's & video's". Uploads komen in de map `uploads/` (meenemen in de back-up!). Zet een bestand in een tekst of blogbericht met `[foto: naam.jpg]` of `[video: naam.mp4]`; het exacte tekstje staat bij elk bestand.
+- **Geblokkeerd bij het inloggen?** De ban geldt per IP-adres, niet per account. Opheffen: `python seed.py --unban`.
+- **Thema-knop:** zon = lichte modus, maan = donkere modus.

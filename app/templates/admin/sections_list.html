@@ -1,13 +1,19 @@
 <div id="sections-list">
   {% if msg %}<p class="ok" role="status">{{ msg }}</p>{% endif %}
-  {% for s in sections %}
+  {% for g in groups %}
+  <h2 class="pg">{{ g.label }}</h2>
+  {% for it in g.rows %}
   <div class="card item">
-    <div><strong>{{ s.title }}</strong><br><small>pagina: {{ page_labels.get(s.page, s.page) }} · taal: {{ s.lang }} · volgorde: {{ s.position }}</small></div>
+    <div class="grow"><strong>{{ it.title }}</strong> <small>(volgorde {{ it.position }})</small></div>
     <div class="row">
-      <button class="btn mini" hx-get="/admin/sections/{{ s.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top">Bewerken</button>
-      <button class="btn mini danger" hx-delete="/admin/sections/{{ s.id }}" hx-confirm="Zeker weten? Dit verdwijnt meteen van de website." hx-target="#sections-list" hx-swap="outerHTML">Verwijderen</button>
+      {% for l in ['nl', 'fr', 'en', 'es', 'ja'] %}{% set s = it.langs.get(l) %}
+      {% if s %}<button class="chip on" hx-get="/admin/sections/{{ s.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top" title="Bewerken ({{ l|upper }})">{{ l|upper }}</button>
+      {% else %}<button class="chip" hx-get="/admin/sections/translate?page={{ g.page }}&amp;position={{ it.position }}&amp;lang={{ l }}" hx-target="#form-area" hx-swap="innerHTML show:top" title="Vertaling toevoegen ({{ l|upper }})">{{ l|upper }} +</button>{% endif %}
+      {% endfor %}
+      {% set a = it.langs.get('all') %}{% if a %}<button class="chip on" hx-get="/admin/sections/{{ a.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top">ALLE TALEN</button>{% endif %}
     </div>
   </div>
-  {% else %}<p>Nog geen secties. Klik op "+ Nieuwe sectie".</p>{% endfor %}
+  {% else %}<p class="hint">Hier staat nog niets.</p>{% endfor %}
+  {% endfor %}
 </div>
 {% if oob %}<div id="form-area" hx-swap-oob="true"></div>{% endif %}

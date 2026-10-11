@@ -5,7 +5,8 @@ import os
 
 from sqlalchemy.orm import Session
 
-from .models import Section, Slide
+from .i18n import LANGS
+from .models import Media, Post, Section, Slide
 
 log = logging.getLogger("sfdojo")
 _producer = None
@@ -29,11 +30,28 @@ def log_event(event: str, **data):
 
 
 def sections_for(db: Session, page: str, lang: str):
-    """Secties van een pagina in de gekozen taal (+ 'all'); ontbreekt de taal, dan Nederlands."""
-    def q(l):
-        return (db.query(Section).filter(Section.page == page, Section.lang.in_([l, "all"]))
-                .order_by(Section.position, Section.id).all())
-    return q(lang) or q("nl")
+    """Per volgnummer de tekst in de gekozen taal; ontbreekt die, dan de Nederlandse. 'all' toont altijd."""
+    rows = (db.query(Section).filter(Section.page == page, Section.lang.in_([lang, "nl", "all"]))
+            .order_by(Section.position, Section.id).all())
+    best = {}
+    for s in rows:
+        if s.lang != "all" and (s.position not in best or s.lang == lang):
+            best[s.position] = s
+    picked = list(best.values()) + [s for s in rows if s.lang == "all"]
+    return sorted(picked, key=lambda s: (s.position, s.id))
+
+
+def overview(db: Session, labels: dict):
+    """Voor het beheer: per pagina en volgnummer welke talen al bestaan."""
+    out = []
+    for page, label in labels.items():
+        by_pos = {}
+        for s in db.query(Section).filter(Section.page == page).order_by(Section.position, Section.id):
+            by_pos.setdefault(s.position, []).append(s)
+        items = [dict(position=pos, title=(next((s for s in g if s.lang == "nl"), g[0])).title,
+                      langs={s.lang: s for s in g}) for pos, g in sorted(by_pos.items())]
+        out.append(dict(page=page, label=label, rows=items))
+    return out
 
 
 def all_sections(db: Session):
@@ -56,4 +74,16 @@ def delete_section(db: Session, s):
 
 
 def slides(db: Session):
-    return db.query(Slide).order_by(Slide.id).all()
+    """Hero: geüploade media met 'in slideshow'; anders de placeholders uit seed.py."""
+    items = [dict(url=f"/media/{m.name}", caption=m.caption, kind=m.kind)
+             for m in db.query(Media).filter(Media.in_hero == True).order_by(Media.id)]  # noqa: E712
+    if items:
+        return items
+    return [dict(url=f"/static/images/{s.filename}", caption=s.caption, kind="image")
+            for s in db.query(Slide).order_by(Slide.id)]
+
+
+def posts_for(db: Session, lang: str):
+    def q(l):
+        return db.query(Post).filter(Post.lang.in_([l, "all"])).order_by(Post.created.desc(), Post.id.desc()).all()
+    return q(lang) or q("nl")

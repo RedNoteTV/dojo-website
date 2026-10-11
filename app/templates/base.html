@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="SF Dojo – Rishinjuku Karate, MMA, kickboxing, grappling, self-defence and G-Karate in Oud-Heverlee near Leuven.">
-<link rel="icon" href="/static/logo.png">
+<link rel="icon" href="/static/favicon.png">
 <title>{% block title %}{% endblock %} · SF Dojo</title>
 <style>
 /* Eén stijlblok voor de hele site. Kleuren staan bovenaan als variabelen. */
 *{box-sizing:border-box}
 body{--ink:#1d2329;--paper:#f3ecdc;--bg:#f7f1e3;--card:#fffaf0;--text:#1f2328;--muted:#5b616a;--accent:#b08a57;--on-accent:#1b1610;--line:#e2d6bd;
-  margin:0;background:var(--bg);color:var(--text);font:18px/1.65 "Noto Sans","Segoe UI",system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
+  margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--text);font:18px/1.65 "Noto Sans","Segoe UI",system-ui,"Hiragino Sans","Yu Gothic",sans-serif}
 body.dark{--bg:#14181c;--card:#1d2329;--text:#efe9dc;--muted:#a9a395;--accent:#c9a97a;--on-accent:#14110c;--line:#2e363e}
 @media(prefers-color-scheme:dark){body:not(.light){--bg:#14181c;--card:#1d2329;--text:#efe9dc;--muted:#a9a395;--accent:#c9a97a;--on-accent:#14110c;--line:#2e363e}}
 h1,h2,h3{font-family:"Hiragino Mincho ProN","Noto Serif JP","Iowan Old Style",Georgia,serif;line-height:1.25}
@@ -19,9 +19,9 @@ a{color:inherit}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 /* kop */
 header{background:var(--ink);color:var(--paper)}
-.bar{max-width:1100px;margin:auto;padding:.6rem 1rem;display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;align-items:center;justify-content:space-between}
+.bar{max-width:1200px;margin:auto;padding:.6rem 1rem;display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;align-items:center;justify-content:space-between}
 .brand{display:flex;align-items:center;gap:.6rem;text-decoration:none;font-weight:700;letter-spacing:.04em}
-.brand img{border-radius:50%}
+.brand img{display:block;height:52px;width:auto}
 nav{display:flex;flex-wrap:wrap}
 nav a,.langs a{color:var(--paper);text-decoration:none;padding:.4rem .7rem;border-radius:6px}
 nav a:hover,.langs a:hover{background:#ffffff1f}
@@ -37,18 +37,18 @@ nav a:hover,.langs a:hover{background:#ffffff1f}
 .hero{background:radial-gradient(circle at 50% 25%,#51443a 0,var(--ink) 68%);color:var(--paper);text-align:center;padding:2.2rem 1rem 4rem;position:relative;overflow:hidden}
 .hero::after{content:"";position:absolute;left:-10%;right:-10%;top:58%;height:16px;background:linear-gradient(90deg,transparent,var(--paper) 25%,var(--paper) 75%,transparent);transform:rotate(-16deg);opacity:.8;filter:blur(1.5px)}
 .hero>*{position:relative;z-index:1}
-.hero h1{font-size:clamp(1.8rem,6vw,3.2rem);margin:0 0 .3rem}
+.hero h1{font-size:clamp(1.3rem,4.5vw,2rem);letter-spacing:.06em;margin:0 0 .3rem}
 .hero .motto{margin:0 0 1.5rem;color:#e6d9bd;font-size:1.15rem}
 .slide{position:relative;max-width:900px;margin:0 auto;border-radius:12px;overflow:hidden;aspect-ratio:16/9;background:#000;box-shadow:0 10px 40px #0008}
 .slide img{width:100%;height:100%;object-fit:cover;display:block}
 .slide .cap{position:absolute;left:0;right:0;bottom:0;padding:1.5rem 1rem .6rem;background:linear-gradient(transparent,#000b)}
 .slide .nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:48px;border:0;border-radius:50%;background:#000a;color:#fff;font-size:1.6rem;cursor:pointer}
 .nav.prev{left:.6rem}.nav.next{right:.6rem}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;max-width:1000px;margin:-2.2rem auto 1rem;padding:0 1rem;position:relative;z-index:2}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;width:100%;max-width:1000px;margin:-2.2rem auto 1rem;padding:0 1rem;position:relative;z-index:2}
 .cards a{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.1rem 1.3rem;text-decoration:none;font-weight:700;font-size:1.15rem;text-align:center}
 .cards a:hover{border-color:var(--accent)}
 /* inhoud */
-main{max-width:900px;margin:0 auto;padding:1.5rem 1rem 3rem}
+main{width:100%;max-width:900px;margin:0 auto;padding:1.5rem 1rem 3rem}
 main.narrow{max-width:460px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:1.2rem 1.4rem;margin:1rem 0}
 .card h2{margin-top:0}
@@ -58,7 +58,7 @@ main.narrow{max-width:460px}
 table{width:100%;border-collapse:collapse}
 th,td{padding:.6rem .8rem;text-align:left;border-bottom:1px solid var(--line)}
 th{background:var(--ink);color:var(--paper)}
-footer{background:var(--card);color:var(--muted);padding:2rem 1rem 1rem;border-top:1px solid var(--line);font-size:.95rem}
+footer{margin-top:auto;background:var(--card);color:var(--muted);padding:2rem 1rem 1rem;border-top:1px solid var(--line);font-size:.95rem}
 footer a{color:var(--text)}
 .foot{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1.5rem;line-height:1.8}
 .foot strong{color:var(--text)}
@@ -74,7 +74,7 @@ nav a{font-size:.95rem}
 .langs{display:flex;gap:.1rem}
 .langs a{display:inline-flex;align-items:center;gap:.35rem}
 .langs img{display:block;border-radius:3px;box-shadow:0 0 0 1px #0005}
-@media(max-width:940px){
+@media(max-width:1180px){
  .burger{display:block}
  .menu{display:none;flex-basis:100%;flex-direction:column;align-items:stretch}
  .menu-toggle:checked~.menu{display:flex}
@@ -101,6 +101,31 @@ nav a{font-size:.95rem}
  .sd-head{text-align:left;margin-top:.6rem}
  .slot{text-align:left;align-items:flex-start}
 }
+/* thema-knop: toont de huidige stand (zon = licht, maan = donker) */
+.btn.th-sun,.btn.th-moon{font-size:1.25rem;min-width:46px;padding:.2rem .6rem}
+.btn.th-moon{display:none}
+body.dark .btn.th-sun{display:none}body.dark .btn.th-moon{display:inline-block}
+@media(prefers-color-scheme:dark){body:not(.light) .btn.th-sun{display:none}body:not(.light) .btn.th-moon{display:inline-block}}
+/* logo in de footer: donkere versie op licht, lichte versie op donker */
+.foot-logo{display:block;height:auto;margin-bottom:.4rem}
+.lg-paper{display:none}
+body.dark .lg-ink{display:none}body.dark .lg-paper{display:block}
+@media(prefers-color-scheme:dark){body:not(.light) .lg-ink{display:none}body:not(.light) .lg-paper{display:block}}
+.hero-logo{display:block;margin:0 auto .8rem;height:clamp(90px,16vw,150px);width:auto}
+.slide video{width:100%;height:100%;object-fit:cover;display:block}
+.media-embed img,.media-embed video{display:block;max-width:100%;border-radius:10px;margin:.6rem 0}
+.muted{color:var(--muted)}
+.card h2 a{text-decoration:none}
+.vh{position:absolute;left:-9999px}
+/* beheer: taal-knoppen, miniaturen */
+.chip{min-height:40px;min-width:54px;padding:.3rem .8rem;border-radius:999px;border:2px dashed var(--muted);background:transparent;color:var(--muted);font:inherit;font-weight:700;cursor:pointer}
+.chip.on{border:2px solid var(--accent);background:var(--accent);color:var(--on-accent)}
+.grow{flex:1;min-width:180px}
+h2.pg{margin:1.8rem 0 .2rem}
+input[type=checkbox]{width:auto;transform:scale(1.4);margin-right:.6rem}
+.check{display:flex;align-items:center}
+.thumb img,.thumb video{width:120px;height:80px;object-fit:cover;border-radius:8px;display:block}
+code{background:var(--bg);padding:.1rem .4rem;border-radius:4px;word-break:break-all}
 /* beheer: grote velden, hoog contrast */
 label{display:block;font-weight:700;margin:.9rem 0 .2rem}
 input,select,textarea{width:100%;font:inherit;padding:.7rem;border:2px solid var(--muted);border-radius:8px;background:var(--card);color:var(--text)}
@@ -126,17 +151,19 @@ body.dark .err{color:#ff8a80}body.dark .ok{color:#81c784}
 <body class="{{ theme }}"{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
 {% block header %}
 <header><div class="bar">
-  <a class="brand" href="/"><img src="/static/logo.png" alt="" width="44" height="44"><span>SF DOJO</span></a>
+  <a class="brand" href="/" aria-label="SF Dojo – Rishinjuku Karate"><img src="/static/logo-light.png" alt="SF Dojo" width="80" height="52"></a>
   <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-label="{{ t.menu }}">
   <label for="menu-toggle" class="burger"></label>
   <div class="menu">
     <nav>
       <a href="/">{{ t.home }}</a><a href="/about">{{ t.about }}</a><a href="/disciplines">{{ t.disciplines }}</a>
-      <a href="/schedule">{{ t.schedule }}</a><a href="/prices">{{ t.prices }}</a><a href="/contact">{{ t.contact }}</a>
+      <a href="/schedule">{{ t.schedule }}</a><a href="/prices">{{ t.prices }}</a><a href="/blog">{{ t.blog }}</a><a href="/contact">{{ t.contact }}</a>
+      {% for label, url in link_items('nav', lang) %}<a href="{{ url }}">{{ label }}</a>{% endfor %}
     </nav>
     <div class="tools">
       <span class="langs">{% for l in langs %}<a href="?lang={{ l }}" class="{{ 'on' if l == lang }}" hreflang="{{ l }}" title="{{ lang_names[l] }}"><img src="/static/flags/{{ l }}.svg" alt="" width="24" height="16"><span>{{ l|upper }}</span></a>{% endfor %}</span>
-      <button class="btn mini" hx-post="/theme" hx-swap="none" title="Auto / Light / Dark" aria-label="Auto / Light / Dark">◐</button>
+      <button class="btn mini th-sun" hx-post="/theme?set=dark" hx-swap="none" title="Light → Dark" aria-label="Light mode (switch to dark)">☀</button>
+      <button class="btn mini th-moon" hx-post="/theme?set=light" hx-swap="none" title="Dark → Light" aria-label="Dark mode (switch to light)">☾</button>
     </div>
   </div>
 </div></header>
@@ -145,9 +172,9 @@ body.dark .err{color:#ff8a80}body.dark .ok{color:#81c784}
 {% block footer %}
 <footer>
   <div class="foot">
-    <div><strong>SFDOJO vzw</strong><br>Rishinjuku Karate 理心塾<br>Banhagestraat 75<br>3052 Oud-Heverlee<br><em>Self Defense for Self Confidence</em></div>
+    <div><img class="foot-logo lg-ink" src="/static/logo.png" alt="SF Dojo" width="110" height="71"><img class="foot-logo lg-paper" src="/static/logo-light.png" alt="" width="110" height="71"><strong>SFDOJO vzw</strong><br>Rishinjuku Karate 理心塾<br>Banhagestraat 75<br>3052 Oud-Heverlee<br><em>Self Defense for Self Confidence</em></div>
     <div><strong>{{ t.contact }}</strong><br><a href="mailto:info@sfdojo.be">info@sfdojo.be</a><br><a href="tel:+32471687598">+32 471 68 75 98</a></div>
-    <div><strong>{{ t.links }}</strong><br><a href="/schedule">{{ t.schedule }}</a><br><a href="/prices">{{ t.prices }}</a><br><a href="/payments">{{ t.payments }}</a></div>
+    <div><strong>{{ t.links }}</strong><br><a href="/schedule">{{ t.schedule }}</a><br><a href="/prices">{{ t.prices }}</a><br><a href="/payments">{{ t.payments }}</a><br><a href="/blog">{{ t.blog }}</a>{% for label, url in link_items('footerlinks', lang) %}<br><a href="{{ url }}">{{ label }}</a>{% endfor %}</div>
     {% set soc = footer_links() %}{% if soc %}<div><strong>{{ t.follow }}</strong>{% for name, url in soc %}<br><a href="{{ url }}" target="_blank" rel="noopener nofollow">{{ name }}</a>{% endfor %}</div>{% endif %}
   </div>
   <p class="copy">© {{ year() }} SFDOJO vzw</p>

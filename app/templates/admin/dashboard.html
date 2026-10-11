@@ -4,11 +4,11 @@
 <main>
   <div class="card">
     <strong>Zo werkt het</strong>
-    <p>1. Klik op Bewerken bij de tekst die je wil aanpassen.
-2. Pas de tekst aan en klik op Opslaan.
-3. Klaar: het staat meteen op de website.</p>
+    <p>1. Klik op een taal-knop (NL, FR, EN, ES, JA) om die tekst aan te passen.
+2. Een knop met + betekent: nog geen vertaling. Klik erop, vertaal de tekst en sla op.
+3. Klaar: het staat meteen op de website. Zonder vertaling ziet een bezoeker de Nederlandse tekst.</p>
   </div>
-  <button class="btn" hx-get="/admin/sections/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuwe sectie</button>
+  <button class="btn" hx-get="/admin/sections/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuwe tekst</button>
   <div id="form-area"></div>
   {% include "admin/sections_list.html" %}
 </main>

@@ -1,7 +1,7 @@
 """Databasetabellen."""
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 
 from .database import Base
 
@@ -44,3 +44,23 @@ class LoginBlock(Base):
     fails = Column(Integer, default=0)      # mislukte pogingen in de huidige ronde
     strikes = Column(Integer, default=0)    # hoeveel keer dit IP al geband werd
     banned_until = Column(DateTime, nullable=True)
+
+
+class Media(Base):
+    """Geüploade foto of video (map uploads/). in_hero = tonen in de slideshow op de home."""
+    __tablename__ = "media"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(40), unique=True, nullable=False)   # willekeurige bestandsnaam, nooit die van de gebruiker
+    kind = Column(String(10), nullable=False)                # image | video
+    caption = Column(String(200), default="")
+    in_hero = Column(Boolean, default=False)
+
+
+class Post(Base):
+    """Blogbericht. lang = nl/fr/en/es/ja of 'all'."""
+    __tablename__ = "posts"
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, default="")
+    lang = Column(String(5), nullable=False, default="nl")
+    created = Column(DateTime, default=utcnow)

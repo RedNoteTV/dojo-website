@@ -3,6 +3,7 @@
   python seed.py                 -> eerste keer (bestaande data blijft staan)
   python seed.py --reset-users   -> nieuwe wachtwoorden voor de 3 beheerders
   python seed.py --reset-content -> WIST alle secties en slides en zet de dummy-inhoud terug
+  python seed.py --unban         -> heft ALLE geblokkeerde IP's op (of: --unban 1.2.3.4 voor één IP)
 Wachtwoorden worden willekeurig gemaakt en ÉÉN keer getoond: noteer ze meteen.
 """
 import os
@@ -11,10 +12,19 @@ import sys
 
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
-from app.models import Section, Slide, User
+from app.models import LoginBlock, Post, Section, Slide, User
 
 Base.metadata.create_all(engine)
 db = SessionLocal()
+
+if "--unban" in sys.argv:                      # IP-ban opheffen (de accounts zelf worden nooit geblokkeerd)
+    i = sys.argv.index("--unban")
+    ip = sys.argv[i + 1] if len(sys.argv) > i + 1 and not sys.argv[i + 1].startswith("--") else None
+    q = db.query(LoginBlock)
+    n = (q.filter_by(ip=ip) if ip else q).delete()
+    db.commit()
+    print(f"{n} geblokkeerd(e) IP-adres(sen) vrijgegeven.")
+    sys.exit()
 
 # ---- beheerders: exact 3 (namen aanpasbaar via .env: ADMIN1_USER, ...)
 names = [os.getenv("ADMIN1_USER", "dev"), os.getenv("ADMIN2_USER", "righthand"), os.getenv("ADMIN3_USER", "leader")]
@@ -36,6 +46,7 @@ db.commit()
 if "--reset-content" in sys.argv:
     db.query(Section).delete()
     db.query(Slide).delete()
+    db.query(Post).delete()
     db.commit()
 if db.query(Section).count() == 0:
     S = lambda page, lang, pos, title, content: Section(page=page, lang=lang, position=pos, title=title, content=content)
@@ -76,11 +87,14 @@ if db.query(Section).count() == 0:
         # --- betalingen
         S("payments", "nl", 0, "Betalen", "Betaling via overschrijving (IBAN) of Bancontact in de KBC-app.\n\nOpen de KBC-app, kies Overschrijven, vul de IBAN hieronder en de naam van het lid als mededeling in, en bevestig."),
         # --- footer: social media (vervang door de echte links!)
-        S("footer", "all", 0, "Social media", "Facebook | https://www.facebook.com/\nInstagram | https://www.instagram.com/\nYouTube | https://www.youtube.com/"),
+        S("footer", "all", 0, "Social media", "Facebook | https://www.facebook.com/\nInstagram | https://www.instagram.com/\nYouTube | https://www.youtube.com/\nTikTok | https://www.tiktok.com/"),
     ])
     db.add_all([Slide(filename="slide1.svg", caption="Rishinjuku Karate 理心塾"),
                 Slide(filename="slide2.svg", caption="Self Defense for Self Confidence"),
                 Slide(filename="slide3.svg", caption="G-Karate")])
     db.commit()
     print("Dummy-inhoud aangemaakt.")
+if db.query(Post).count() == 0:
+    db.add(Post(lang="nl", title="Welkom op onze nieuwe website", content="Onze nieuwe website is online! Hier vind je het lessenrooster, informatie over onze disciplines en alle contactgegevens.\n\nIn de blog delen we nieuws over lessen, stages en activiteiten."))
+    db.commit()
 print("Klaar.")

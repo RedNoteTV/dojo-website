@@ -1,0 +1,10 @@
+{% extends "admin/layout.html" %}
+{% block title %}Blog{% endblock %}
+{% block content %}
+<main>
+  <h1>Blog</h1>
+  <button class="btn" hx-get="/admin/blog/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuw bericht</button>
+  <div id="form-area"></div>
+  {% include "admin/blog_list.html" %}
+</main>
+{% endblock %}

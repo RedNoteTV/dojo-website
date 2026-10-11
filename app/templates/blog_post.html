@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<main>
+  <article class="card"><small class="muted">{{ post.created.strftime('%d-%m-%Y') }}</small>
+    <h1>{{ post.title }}</h1>
+    {% with text=post.content %}{% include "partials/content.html" %}{% endwith %}</article>
+  <p><a href="/blog">← {{ t.blog }}</a></p>
+</main>
+{% endblock %}
