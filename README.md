@@ -101,3 +101,11 @@ loginctl enable-linger $USER
 Uitzetten van dat automatisch starten: `systemctl --user disable --now podman-restart.service`.
 
 De container heeft zijn eigen database: de wachtwoorden en instellingen van je lokale `uvicorn`-versie gelden daar niet. Draai niet tegelijk uvicorn en de container: ze gebruiken allebei poort 8000.
+
+## Nieuw in v6
+- **Boeken:** beheer -> Boeken. Titel, beschrijving, prijs, cover (upload) en twee bestel-links (Europa en wereldwijd). Staan op de pagina Boek (`/books`, link in de footer) en onder de Prijzen.
+- **YouTube:** in het tekst- en blogformulier plak je de link bij "YouTube-video invoegen". De video staat dan als nette, meeschalende speler in de tekst (`[youtube: id]`). Hij laadt pas na een klik, zodat de pagina niets met YouTube deelt zolang niemand afspeelt.
+- **FAQ:** pagina "FAQ: veelgestelde vragen" bij Teksten: titel = vraag, tekst = antwoord. Staat als uitklapbare lijst boven de footer op elke pagina.
+- **Skool-banner:** pagina "Home: banner onderaan" bij Teksten. Titel = kop; tekst = uitleg, daarna een lege regel en dan `Knoptekst | https://www.skool.com/jouw-course`.
+- **Prijzen:** tabellen op de pagina Prijzen worden prijskaartjes (`Formule | Prijs | Opmerking`). Een pdf met details voeg je toe met "Invoegen" in het tekstformulier.
+- Een gewone `python seed.py` vult FAQ, banner en boek aan als ze ontbreken; er wordt niets gewist.

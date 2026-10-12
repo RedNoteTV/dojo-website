@@ -1,0 +1,31 @@
+<div class="card">
+<form id="bf" hx-post="{{ ('/admin/books/' ~ b.id) if b else '/admin/books' }}" hx-target="#books-list" hx-swap="outerHTML">
+  <h2>{{ 'Boek bewerken' if b else 'Nieuw boek' }}</h2>
+  <label for="b-title">Titel</label>
+  <input id="b-title" name="title" maxlength="200" required value="{{ b.title if b else '' }}">
+  <label for="b-sub">Ondertitel (mag leeg)</label>
+  <input id="b-sub" name="subtitle" maxlength="200" value="{{ b.subtitle if b else '' }}">
+  <div class="row">
+    <div><label for="b-author">Auteur</label><input id="b-author" name="author" maxlength="120" value="{{ b.author if b else '' }}"></div>
+    <div><label for="b-price">Prijs (bv. € 29,50 paperback)</label><input id="b-price" name="price" maxlength="60" value="{{ b.price if b else '' }}"></div>
+    <div><label for="b-pos">Volgorde</label><input id="b-pos" name="position" type="number" min="0" max="99" value="{{ b.position if b else 0 }}"></div>
+  </div>
+  <label for="b-desc">Beschrijving</label>
+  <textarea id="b-desc" name="description" rows="6">{{ b.description if b else '' }}</textarea>
+  <label for="b-eu">Bestel-link Europa</label>
+  <input id="b-eu" name="link_eu" maxlength="500" placeholder="https://..." value="{{ b.link_eu if b else '' }}">
+  <label for="b-world">Bestel-link wereldwijd (bv. Amazon)</label>
+  <input id="b-world" name="link_world" maxlength="500" placeholder="https://..." value="{{ b.link_world if b else '' }}">
+  <label for="b-cover">Cover</label>
+  <select id="b-cover" name="cover"><option value="">(geen cover)</option>{% for m in covers %}<option value="{{ m.name }}" {{ 'selected' if b and b.cover == m.name }}>{{ m.caption or m.name }}</option>{% endfor %}</select>
+</form>
+<div class="upl">
+  <label for="b-file">Nieuwe cover uploaden (foto)</label>
+  <input id="b-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp">
+  <button type="button" class="btn mini" hx-post="/admin/books/upload-cover" hx-encoding="multipart/form-data" hx-include="#b-file, #b-cover" hx-target="#b-cover" hx-swap="outerHTML">Uploaden en kiezen</button>
+  <div id="cover-msg" role="status"></div>
+</div>
+<div id="form-msg" role="alert"></div>
+<div class="row"><button class="btn" type="submit" form="bf">Opslaan</button>
+  <button class="btn" type="button" style="background:var(--muted);color:var(--card)" hx-get="/admin/cancel" hx-target="#form-area" hx-swap="innerHTML">Annuleren</button></div>
+</div>

@@ -1,6 +1,6 @@
 {# Foto's, video's en pdf's kiezen of uploaden en meteen in het tekstveld "{{ field }}" zetten. #}
 <div class="picker">
-  <strong>Foto, video of pdf toevoegen</strong>
+  <strong>Foto, video, pdf of YouTube toevoegen</strong>
   <div class="strip">
     {% for m in media_items() %}
     <div class="pick">
@@ -15,6 +15,11 @@
     <input id="up-file" type="file" name="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,application/pdf">
     <input id="up-cap" name="caption" maxlength="80" placeholder="Naam of onderschrift (mag leeg)">
     <button type="button" class="btn mini" hx-post="/admin/media/upload-insert" hx-encoding="multipart/form-data" hx-include="#up-file, #up-cap, #{{ field }}" hx-vals='{"field": "{{ field }}"}' hx-target="#{{ field }}" hx-swap="outerHTML">Uploaden en invoegen</button>
+  </div>
+  <div class="upl">
+    <label for="yt-url">YouTube-video invoegen (plak de link)</label>
+    <input id="yt-url" name="url" maxlength="300" placeholder="https://www.youtube.com/watch?v=...">
+    <button type="button" class="btn mini" hx-post="/admin/media/youtube-insert" hx-include="#yt-url, #{{ field }}" hx-vals='{"field": "{{ field }}"}' hx-target="#{{ field }}" hx-swap="outerHTML">YouTube invoegen</button>
   </div>
   <div id="pick-msg" role="status"></div>
   <p class="hint">Het tekstje komt onderaan de tekst. Meerdere foto's na elkaar worden vanzelf een mooie galerij. Slepen kan niet: knip en plak het tekstje waar je het wil.</p>

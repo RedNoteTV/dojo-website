@@ -1,0 +1,11 @@
+{% extends "admin/layout.html" %}
+{% block title %}Boeken{% endblock %}
+{% block content %}
+<main>
+  <h1>Boeken</h1>
+  <div class="card"><p>Hier beheer je boeken en publicaties met hun bestel-links. Ze staan op de pagina Boek en onder de Prijzen.</p></div>
+  <button class="btn" hx-get="/admin/books/new" hx-target="#form-area" hx-swap="innerHTML show:top">+ Nieuw boek</button>
+  <div id="form-area"></div>
+  {% include "admin/books_list.html" %}
+</main>
+{% endblock %}

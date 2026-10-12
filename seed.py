@@ -11,13 +11,14 @@ Wachtwoorden worden willekeurig gemaakt en ÉÉN keer getoond: noteer ze meteen.
 import os
 import re
 import secrets
+import shutil
 import sys
 from datetime import date
 from pathlib import Path
 
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
-from app.models import Closure, LoginBlock, Post, Section, Slide, Totp, User
+from app.models import Book, Closure, Media, LoginBlock, Post, Section, Slide, Totp, User
 
 if "--init-env" in sys.argv:                   # .env klaarzetten zonder iets te overschrijven
     env, example = Path(".env"), Path(".env.example")
@@ -99,7 +100,7 @@ if db.query(Section).count() == 0:
         S("about", "nl", 3, "G-Karate: karate voor iedereen", "G-Karate is bedoeld voor personen met een fysieke beperking. De les wordt aangepast aan wat jij kan."),
         # --- disciplines
         S("disciplines", "nl", 0, "Rishinjuku Karate 理心塾", "Onze karatestijl, in groepen voor elk niveau: Karate 8+, Fundamentals (iedereen) en Volwassenen."),
-        S("disciplines", "nl", 1, "Striking for MMA", "Kickboksen en karate-technieken voor de stand-up kant van MMA, voor iedereen of voor volwassenen."),
+        S("disciplines", "nl", 1, "MMA", "Karate technieken zijn zeer efficiënt in 'combat sports' zoals MMA (Mixed Martial Arts). Wij benaderen onze trainingen vanuit karate technieken voor het staande gedeelte. Op de grond werken we aan de submissions die statistisch het meest voorkomen."),
         S("disciplines", "nl", 2, "Grappling No Gi", "Grondwerk zonder judopak (No Gi): controle en technieken op de grond."),
         S("disciplines", "nl", 3, "G-Karate", "Karate voor personen met een fysieke beperking."),
         S("disciplines", "nl", 4, "Open Dojo", "Vrije trainingsavond, voor iedereen."),
@@ -135,5 +136,31 @@ if db.query(Closure).count() == 0:             # voorbeelden volgens de Vlaamse 
         Closure(title="Krokusvakantie", date_from=date(2027, 2, 8), date_to=date(2027, 2, 14), kind="closed", note="Schoolvakantie: geen training."),
         Closure(title="Paasvakantie", date_from=date(2027, 3, 29), date_to=date(2027, 4, 11), kind="closed", note="Schoolvakantie: geen training."),
     ])
+    db.commit()
+# ---- extra's die ook bij een bestaande database worden aangevuld als ze nog ontbreken (FAQ, Skool-banner, boek)
+if db.query(Section).filter_by(page="faq").count() == 0:
+    for i, (q, a) in enumerate([
+        ("Waar vinden de lessen plaats?", "Banhagestraat 75, 3052 Oud-Heverlee, vlak bij Leuven."),
+        ("Kan ik eerst een proefles volgen?", "Ja, neem contact met ons op via de pagina Contact en we spreken een moment af."),
+        ("Is er training tijdens de schoolvakanties?", "Dat verschilt per vakantie. In de kalender op de pagina Lessenrooster zie je precies wanneer er training is, wanneer niet en wanneer er minder lessen zijn."),
+        ("Is er karate voor personen met een beperking?", "Ja, G-Karate is er voor personen met een fysieke beperking. Je vindt de les in het lessenrooster."),
+        ("Hoe kan ik betalen?", "Via overschrijving (IBAN) of Bancontact in de KBC-app. Alle details staan op de pagina Betalingen."),
+    ]):
+        db.add(Section(page="faq", lang="nl", position=i, title=q, content=a))
+    db.commit()
+if db.query(Section).filter_by(page="promo").count() == 0:
+    db.add(Section(page="promo", lang="nl", position=0, title="Verdiep je kennis: de online Rishinjuku Karate Course",
+                   content="De volledige online Rishinjuku Karate Course staat op Skool.\n\nBekijk de course op Skool | https://www.skool.com/"))
+    db.commit()
+if db.query(Book).count() == 0:
+    upload = Path(os.getenv("UPLOAD_DIR") or Path(__file__).parent / "uploads")
+    upload.mkdir(parents=True, exist_ok=True)
+    cover = f"{secrets.token_hex(8)}.png"
+    shutil.copy(Path(__file__).parent / "app/static/images/book-cover.png", upload / cover)
+    db.add(Media(name=cover, kind="image", caption="Weaponize your web (cover)", in_hero=False))
+    db.add(Book(title="Weaponize your web", subtitle="Muchimi, karate's forgotten power source", author="Filip Swennen",
+                price="€ 29,50 paperback", cover=cover,
+                description="\"Weaponize your Web\" combines karate tradition with modern anatomy to explain the ability of the diagonal muscle slings to stretch, recoil and contract to develop power. This knowledge improves all kata, bunkai, self-defense and sports combat techniques.",
+                link_eu="https://print.24bookprint.com/site/cart/addBook/sku/0005000485062", link_world="https://www.amazon.com/dp/B0BF35JFLM"))
     db.commit()
 print("Klaar.")

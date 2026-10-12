@@ -17,13 +17,14 @@ from fastapi.templating import Jinja2Templates
 warnings.filterwarnings("ignore", message="The httpx module is deprecated")   # ruis van Authlib, onschadelijk
 import segno
 from authlib.integrations.starlette_client import OAuth
+from markupsafe import Markup
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth, crud
 from .database import Base, SessionLocal, engine, get_db
 from .i18n import LANGS, NAMES, TEXT
-from .models import Closure, Media, Post, Section, Totp, User
+from .models import Book, Closure, Media, Post, Section, Totp, User
 
 BASE = Path(__file__).parent
 HTTPS = os.getenv("HTTPS_ONLY", "0") == "1"
@@ -89,7 +90,7 @@ templates = Jinja2Templates(directory=BASE / "templates")
 PAGES = {"about": "page.html", "disciplines": "page.html", "schedule": "schedule.html",
          "prices": "prices.html", "contact": "contact.html", "payments": "payments.html"}
 # Paginanamen zoals de beheerder ze ziet (home en footer hebben geen eigen route)
-PAGE_LABELS = {"home": "Home", "about": "Over ons", "disciplines": "Disciplines", "schedule": "Lessenrooster",
+PAGE_LABELS = {"home": "Home", "promo": "Home: banner onderaan (bv. Skool-course)", "faq": "FAQ: veelgestelde vragen", "about": "Over ons", "disciplines": "Disciplines", "schedule": "Lessenrooster",
                "prices": "Prijzen", "contact": "Contact", "payments": "Betalingen",
                "nav": "Menu: extra items", "footerlinks": "Footer: extra links",
                "footer": "Footer: social media"}
@@ -99,6 +100,34 @@ THEMES = ["", "light", "dark"]          # "" = automatisch (volgt het toestel)
 MEDIA_RE = re.compile(r"^\[(foto|video|bestand):\s*([0-9a-f]{16}\.(?:jpg|png|gif|webp|mp4|webm|pdf))(?:\s+([^\[\]|]{1,80}))?\]$")
 
 
+YT_RE = re.compile(r"^\[youtube:\s*([A-Za-z0-9_-]{11})\]$")
+YT_URL = re.compile(r"(?:youtu\.be/|youtube(?:-nocookie)?\.com/(?:watch\?(?:[^\s#]*&)?v=|embed/|shorts/|live/|v/))([A-Za-z0-9_-]{11})")
+URL_RE = re.compile(r"(https?://[^\s<>\"']+[^\s<>\"'.,;:!?)])")
+
+
+def youtube_id(s):
+    """Plak-link (watch, youtu.be, embed, shorts, live) of kale video-id -> 11-tekens id, anders None."""
+    s = (s or "").strip()
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", s):
+        return s
+    m = YT_URL.search(s)
+    return m.group(1) if m else None
+
+
+def linkify(text):
+    """Maakt gewone https://-adressen in een tekst klikbaar. Eerst ge-escaped, dus geen HTML mogelijk."""
+    esc = str(escape(text))
+    return Markup(URL_RE.sub(lambda m: f'<a href="{m.group(1)}" target="_blank" rel="noopener nofollow">{m.group(1)}</a>', esc))
+
+
+def _media_item(line):
+    m = MEDIA_RE.match(line)
+    if m:
+        return m.groups()
+    y = YT_RE.match(line)
+    return ("youtube", y.group(1), None) if y else None
+
+
 def blocks(text):
     """Tekst -> blokken. Regels met '|' = tabel; [foto: x] / [video: x] / [bestand: x] = media (opeenvolgend = galerij)."""
     out = []
@@ -106,9 +135,9 @@ def blocks(text):
         lines = [l for l in para.split("\n") if l.strip()]
         if not lines:
             continue
-        ms = [MEDIA_RE.match(l.strip()) for l in lines]
+        ms = [_media_item(l.strip()) for l in lines]
         if all(ms):
-            items = [m.groups() for m in ms]
+            items = ms
             if out and "media" in out[-1]:
                 out[-1]["media"] += items
             else:
@@ -232,6 +261,40 @@ def link_items(page, lang):
         db.close()
 
 
+def faq_items(lang):
+    db = SessionLocal()
+    try:
+        return crud.sections_for(db, "faq", lang)
+    finally:
+        db.close()
+
+
+def promo(lang):
+    """Opvallende banner onderaan de home: titel, tekst en max. 2 knoppen (regels 'Knoptekst | https://...')."""
+    db = SessionLocal()
+    try:
+        secs = crud.sections_for(db, "promo", lang)
+        if not secs:
+            return None
+        text, buttons = [], []
+        for b in blocks(secs[0].content):
+            if "rows" in b:
+                buttons += [(r[0], u) for r in b["rows"] if len(r) > 1 and (u := normalize_link(r[1]))]
+            elif "text" in b:
+                text.append(b["text"])
+        return dict(title=secs[0].title, text=text, buttons=buttons[:2])
+    finally:
+        db.close()
+
+
+def books():
+    db = SessionLocal()
+    try:
+        return db.query(Book).order_by(Book.position, Book.id).all()
+    finally:
+        db.close()
+
+
 def excerpt(text, n=180):
     for b in blocks(text):
         if "text" in b:
@@ -241,7 +304,9 @@ def excerpt(text, n=180):
 
 
 templates.env.globals.update(blocks=blocks, schedule=schedule, footer_links=footer_links, page_labels=PAGE_LABELS,
-                             lang_names=NAMES, year=lambda: datetime.now().year, link_items=link_items, excerpt=excerpt)
+                             lang_names=NAMES, year=lambda: datetime.now().year, link_items=link_items, excerpt=excerpt,
+                             faq_items=faq_items, promo=promo, books=books)
+templates.env.filters["linkify"] = linkify
 
 
 @app.middleware("http")
@@ -249,7 +314,7 @@ async def security_headers(request: Request, call_next):
     resp = await call_next(request)
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-        "frame-ancestors 'none'; form-action 'self'; base-uri 'none'")
+        "frame-src https://www.youtube-nocookie.com; frame-ancestors 'none'; form-action 'self'; base-uri 'none'")
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "same-origin"
     if request.url.path.startswith("/admin"):
@@ -391,6 +456,21 @@ def today_view(request: Request, db: Session = Depends(get_db)):
     info = day_info(lessons_for(db, get_lang(request)), periods, today)
     upcoming = [dict(p=p, label=fmt_range(p.date_from, p.date_to), now=p.date_from <= today) for p in periods[:4]]
     return render(request, "partials/today.html", info=info, upcoming=upcoming)
+
+
+@app.get("/embed/youtube/{vid}", response_class=HTMLResponse)
+def youtube_embed(vid: str):
+    """Wordt pas bij een klik geladen (HTMX): zo maakt de pagina geen verbinding met YouTube voor iemand erop klikt."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+        raise HTTPException(404)
+    return HTMLResponse('<div class="yt-frame"><iframe src="https://www.youtube-nocookie.com/embed/' + vid +
+                        '?autoplay=1&amp;rel=0" title="YouTube" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" '
+                        'allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>')
+
+
+@app.get("/books", response_class=HTMLResponse)
+def books_page(request: Request):
+    return render(request, "books.html", title=TEXT[get_lang(request)]["books"])
 
 
 @app.get("/blog", response_class=HTMLResponse)
@@ -905,6 +985,14 @@ async def media_upload_insert(request: Request, user=Depends(auth.current_user),
     return _textarea(field, _append(content, media_tag(m)), "Geüpload en ingevoegd onderaan de tekst.")
 
 
+@app.post("/admin/media/youtube-insert", dependencies=[Depends(auth.csrf_guard)])
+def youtube_insert(url: str = Form(""), content: str = Form(""), field: str = Form(""), user=Depends(auth.current_user)):
+    vid = youtube_id(url[:300])
+    if not vid:
+        return _textarea(field, content, "Dit is geen geldige YouTube-link. Plak het adres uit de adresbalk of via Delen.", False)
+    return _textarea(field, _append(content, f"[youtube: {vid}]"), "YouTube-video ingevoegd onderaan de tekst.")
+
+
 @app.post("/admin/media/{mid}/insert", dependencies=[Depends(auth.csrf_guard)])
 def media_insert(mid: int, content: str = Form(""), field: str = Form(""),
                  user=Depends(auth.current_user), db: Session = Depends(get_db)):
@@ -1091,3 +1179,112 @@ def closure_delete(request: Request, cid: int, user=Depends(auth.current_user), 
         db.delete(c)
         db.commit()
     return _closures(request, db, "Verwijderd.")
+
+
+# ---------------------------------------------------------------- beheer: boeken
+def _covers(db):
+    return db.query(Media).filter(Media.kind == "image").order_by(Media.id.desc()).all()
+
+
+def _cover_select(db, selected="", msg="", ok=True):
+    opts = '<option value="">(geen cover)</option>' + "".join(
+        f'<option value="{m.name}"{" selected" if m.name == selected else ""}>{escape(m.caption or m.name)}</option>' for m in _covers(db))
+    return HTMLResponse(f'<select id="b-cover" name="cover">{opts}</select>'
+                        f'<div id="cover-msg" hx-swap-oob="true" role="status" class="{"ok" if ok else "err"}">{escape(msg)}</div>')
+
+
+def _books_admin(request, db, msg=None):
+    return render(request, "admin/books_list.html", books=db.query(Book).order_by(Book.position, Book.id).all(), msg=msg, oob=True)
+
+
+def _book_clean(db, title, subtitle, author, description, price, cover, link_eu, link_world, position):
+    title = title.strip()[:200]
+    if not title:
+        return None, "Vul de titel van het boek in."
+    links = []
+    for raw in (link_eu, link_world):
+        u = normalize_link(raw) if raw.strip() else ""
+        if raw.strip() and not (u and u.lower().startswith(("http://", "https://"))):
+            return None, "Een bestel-link moet een volledig adres zijn, bv. https://www.amazon.com/dp/..."
+        links.append(u[:500])
+    if cover and not db.query(Media).filter(Media.name == cover, Media.kind == "image").first():
+        return None, "Kies een cover uit de lijst of upload een foto."
+    return dict(title=title, subtitle=subtitle.strip()[:200], author=author.strip()[:120], description=description.strip()[:3000],
+                price=price.strip()[:60], cover=cover, link_eu=links[0], link_world=links[1], position=max(0, min(position, 99))), None
+
+
+@app.get("/admin/books", response_class=HTMLResponse)
+def books_admin(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    return render(request, "admin/books.html", user=user, books=db.query(Book).order_by(Book.position, Book.id).all(), msg=None, oob=False)
+
+
+@app.get("/admin/books/new", response_class=HTMLResponse)
+def book_new(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    return render(request, "admin/book_form.html", b=None, covers=_covers(db))
+
+
+@app.get("/admin/books/{bid}/edit", response_class=HTMLResponse)
+def book_edit(request: Request, bid: int, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    b = db.get(Book, bid)
+    if not b:
+        raise HTTPException(404)
+    return render(request, "admin/book_form.html", b=b, covers=_covers(db))
+
+
+@app.post("/admin/books/upload-cover", dependencies=[Depends(auth.csrf_guard)])
+async def book_cover_upload(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    form = await request.form()
+    selected, file = str(form.get("cover", "")), form.get("file")
+    if not hasattr(file, "read") or not getattr(file, "filename", ""):
+        return _cover_select(db, selected, "Kies eerst een foto.", False)
+    info, err = await _store(file)
+    if err:
+        return _cover_select(db, selected, err, False)
+    if info["kind"] != "image":
+        (UPLOADS / info["name"]).unlink(missing_ok=True)
+        return _cover_select(db, selected, "Een cover moet een foto zijn (jpg, png, gif of webp).", False)
+    db.add(Media(name=info["name"], kind="image", caption=str(form.get("caption", "Boekcover"))[:200] or "Boekcover", in_hero=False))
+    db.commit()
+    crud.log_event("media_uploaded", user=user.username, **info)
+    return _cover_select(db, info["name"], "Geüpload en gekozen. Klik nog op Opslaan.")
+
+
+@app.post("/admin/books", dependencies=[Depends(auth.csrf_guard)])
+def book_create(request: Request, title: str = Form(""), subtitle: str = Form(""), author: str = Form(""),
+                description: str = Form(""), price: str = Form(""), cover: str = Form(""), link_eu: str = Form(""),
+                link_world: str = Form(""), position: int = Form(0), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    data, err = _book_clean(db, title, subtitle, author, description, price, cover, link_eu, link_world, position)
+    if err:
+        return _bad(err)
+    b = Book(**data)
+    db.add(b)
+    db.commit()
+    crud.log_event("book_created", user=user.username, id=b.id, title=b.title)
+    return _books_admin(request, db, "Opgeslagen. Het boek staat op de website.")
+
+
+@app.post("/admin/books/{bid}", dependencies=[Depends(auth.csrf_guard)])
+def book_update(request: Request, bid: int, title: str = Form(""), subtitle: str = Form(""), author: str = Form(""),
+                description: str = Form(""), price: str = Form(""), cover: str = Form(""), link_eu: str = Form(""),
+                link_world: str = Form(""), position: int = Form(0), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    b = db.get(Book, bid)
+    if not b:
+        raise HTTPException(404)
+    data, err = _book_clean(db, title, subtitle, author, description, price, cover, link_eu, link_world, position)
+    if err:
+        return _bad(err)
+    for k, v in data.items():
+        setattr(b, k, v)
+    db.commit()
+    crud.log_event("book_updated", user=user.username, id=bid, title=b.title)
+    return _books_admin(request, db, "Opgeslagen.")
+
+
+@app.delete("/admin/books/{bid}", dependencies=[Depends(auth.csrf_guard)])
+def book_delete(request: Request, bid: int, user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    b = db.get(Book, bid)
+    if b:
+        crud.log_event("book_deleted", user=user.username, id=bid, title=b.title)
+        db.delete(b)
+        db.commit()
+    return _books_admin(request, db, "Verwijderd.")

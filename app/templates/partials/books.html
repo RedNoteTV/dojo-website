@@ -1,0 +1,13 @@
+{% for b in books() %}
+<article class="card book">
+  {% if b.cover %}<img class="book-cover" src="/media/{{ b.cover }}" alt="{{ b.title }}" loading="lazy">{% else %}<div></div>{% endif %}
+  <div>
+    <h2>{{ b.title }}</h2>
+    {% if b.subtitle %}<p class="muted">{{ b.subtitle }}</p>{% endif %}
+    {% if b.author %}<p><strong>{{ b.author }}</strong></p>{% endif %}
+    {% with text=b.description %}{% include "partials/content.html" %}{% endwith %}
+    {% if b.price %}<p class="price">{{ b.price }}</p>{% endif %}
+    <p class="row">{% if b.link_eu %}<a class="btn" href="{{ b.link_eu }}" target="_blank" rel="noopener nofollow">{{ t.buy_eu }}</a>{% endif %}{% if b.link_world %}<a class="btn" href="{{ b.link_world }}" target="_blank" rel="noopener nofollow">{{ t.buy_world }}</a>{% endif %}</p>
+  </div>
+</article>
+{% endfor %}

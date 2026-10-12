@@ -19,4 +19,9 @@
   {% endfor %}
   <p style="text-align:center"><a class="btn" href="/contact">{{ t.trial }}</a></p>
 </main>
+{% set pr = promo(lang) %}{% if pr %}
+<section class="promo"><div class="promo-in"><h2>{{ pr.title }}</h2>
+  {% for para in pr.text %}<p>{{ para|linkify }}</p>{% endfor %}
+  <p>{% for label, url in pr.buttons %}<a class="btn" href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% endfor %}</p>
+</div></section>{% endif %}
 {% endblock %}

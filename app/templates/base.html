@@ -163,6 +163,31 @@ code{background:var(--bg);padding:.1rem .4rem;border-radius:4px;word-break:break
 .lg-c,.lg-r{display:inline-block;width:.9rem;height:.9rem;border-radius:3px;margin-right:.35rem;vertical-align:middle}
 .lg-c{background:repeating-linear-gradient(45deg,#d1495b 0 3px,transparent 3px 6px)}.lg-r{background:#d9a91f55;border:1px dashed #b88a0f}
 @media(max-width:600px){.cell{min-height:52px;font-size:.85rem}.dot{width:7px;height:7px}}
+/* YouTube (laadt pas na een klik), FAQ, banner, boeken, prijskaartjes */
+.yt,.yt-frame{display:block;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;margin:.6rem 0}
+.yt{border:0;background:radial-gradient(circle at 50% 40%,#3a3330,#1d2329);color:#f3ecdc;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;font:inherit;padding:1rem;text-align:center}
+.yt:hover{filter:brightness(1.15)}
+.yt-play{font-size:2.2rem;background:#f00;color:#fff;border-radius:14px;padding:.1rem 1.2rem}
+.yt-frame iframe{width:100%;height:100%;border:0;display:block}
+.faq{background:var(--bg);border-top:1px solid var(--line);padding:2rem 1rem 1rem}
+.faq-in{max-width:900px;margin:0 auto}
+.faq details{border:1px solid var(--line);border-radius:10px;background:var(--card);margin:.5rem 0;padding:.1rem 1rem}
+.faq summary{cursor:pointer;font-weight:700;padding:.7rem 0}
+.faq details[open] summary{color:var(--accent)}
+.promo{background:linear-gradient(135deg,var(--hero1),var(--hero2));color:var(--hfg);border-top:1px solid var(--hline);border-bottom:1px solid var(--hline);padding:2.4rem 1rem;text-align:center;margin-top:1.5rem}
+.promo-in{max-width:760px;margin:0 auto}
+.promo h2{margin-top:0}
+.promo .btn{margin:.3rem}
+.prices{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin:.6rem 0}
+.pcard{border:1px solid var(--line);border-top:5px solid var(--accent);border-radius:12px;padding:1rem;background:var(--bg);text-align:center}
+.pcard h3{margin:.1rem 0 .3rem}
+.pcard .amount{font-size:1.6rem;font-weight:800}
+.pcard p{margin:.4rem 0 0;color:var(--muted)}
+.book{display:grid;grid-template-columns:minmax(120px,200px) 1fr;gap:1.4rem;align-items:start}
+.book-cover{width:100%;height:auto;border-radius:8px;box-shadow:0 6px 20px #0004}
+.book h2{margin:.1rem 0}
+.book .price{font-size:1.2rem;font-weight:700}
+@media(max-width:600px){.book{grid-template-columns:1fr}.book-cover{max-width:220px}}
 /* beheer: grote velden, hoog contrast */
 label{display:block;font-weight:700;margin:.9rem 0 .2rem}
 input,select,textarea{width:100%;font:inherit;padding:.7rem;border:2px solid var(--muted);border-radius:8px;background:var(--card);color:var(--text)}
@@ -207,11 +232,15 @@ body.dark .err{color:#ff8a80}body.dark .ok{color:#81c784}
 {% endblock %}
 {% block content %}{% endblock %}
 {% block footer %}
+{% set faq = faq_items(lang) %}{% if faq %}
+<section class="faq"><div class="faq-in"><h2>{{ t.faq_title }}</h2>
+  {% for q in faq %}<details><summary>{{ q.title }}</summary>{% with text=q.content %}{% include "partials/content.html" %}{% endwith %}</details>{% endfor %}
+</div></section>{% endif %}
 <footer>
   <div class="foot">
     <div><img class="foot-logo lg-ink" src="/static/logo.png" alt="SF Dojo" width="110" height="71"><img class="foot-logo lg-paper" src="/static/logo-light.png" alt="" width="110" height="71"><strong>SFDOJO vzw</strong><br>Rishinjuku Karate 理心塾<br>Banhagestraat 75<br>3052 Oud-Heverlee<br><em>Self Defense for Self Confidence</em></div>
     <div><strong>{{ t.contact }}</strong><br><a href="mailto:info@sfdojo.be">info@sfdojo.be</a><br><a href="tel:+32471687598">+32 471 68 75 98</a></div>
-    <div><strong>{{ t.links }}</strong><br><a href="/schedule">{{ t.schedule }}</a><br><a href="/prices">{{ t.prices }}</a><br><a href="/payments">{{ t.payments }}</a><br><a href="/blog">{{ t.blog }}</a>{% for label, url in link_items('footerlinks', lang) %}<br><a href="{{ url }}">{{ label }}</a>{% endfor %}</div>
+    <div><strong>{{ t.links }}</strong><br><a href="/schedule">{{ t.schedule }}</a><br><a href="/prices">{{ t.prices }}</a><br><a href="/payments">{{ t.payments }}</a><br><a href="/blog">{{ t.blog }}</a><br><a href="/books">{{ t.books }}</a>{% for label, url in link_items('footerlinks', lang) %}<br><a href="{{ url }}">{{ label }}</a>{% endfor %}</div>
     {% set soc = footer_links() %}{% if soc %}<div><strong>{{ t.follow }}</strong>{% for name, url in soc %}<br><a href="{{ url }}" target="_blank" rel="noopener nofollow">{{ name }}</a>{% endfor %}</div>{% endif %}
   </div>
   <p class="copy">© {{ year() }} SFDOJO vzw</p>

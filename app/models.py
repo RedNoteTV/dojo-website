@@ -86,3 +86,18 @@ class Closure(Base):
     kind = Column(String(10), nullable=False, default="closed")
     note = Column(String(300), default="")
     classes = Column(String(200), default="")    # bij 'reduced': lessen die WEL doorgaan (woorden uit de lesnaam, komma-gescheiden)
+
+
+class Book(Base):
+    """Boek/publicatie met twee bestel-links (bv. Europa en wereldwijd). cover = bestandsnaam uit Foto's & video's."""
+    __tablename__ = "books"
+    id = Column(Integer, primary_key=True)
+    position = Column(Integer, default=0)
+    title = Column(String(200), nullable=False)
+    subtitle = Column(String(200), default="")
+    author = Column(String(120), default="")
+    description = Column(Text, default="")
+    price = Column(String(60), default="")
+    cover = Column(String(40), default="")
+    link_eu = Column(String(500), default="")
+    link_world = Column(String(500), default="")

@@ -1,0 +1,15 @@
+<div id="books-list">
+  {% if msg %}<p class="ok" role="status">{{ msg }}</p>{% endif %}
+  {% for b in books %}
+  <div class="card item">
+    <div class="thumb">{% if b.cover %}<img src="/media/{{ b.cover }}" alt="">{% endif %}</div>
+    <div class="grow"><strong>{{ b.title }}</strong><br><small>{{ b.author }}{% if b.price %} · {{ b.price }}{% endif %}</small><br>
+      <small>{{ 'Europa-link ✔' if b.link_eu else 'geen Europa-link' }} · {{ 'wereldwijd-link ✔' if b.link_world else 'geen wereldwijd-link' }}</small></div>
+    <div class="row">
+      <button class="btn mini" hx-get="/admin/books/{{ b.id }}/edit" hx-target="#form-area" hx-swap="innerHTML show:top">Bewerken</button>
+      <button class="btn mini danger" hx-delete="/admin/books/{{ b.id }}" hx-confirm="Zeker weten? Dit boek verdwijnt van de website." hx-target="#books-list" hx-swap="outerHTML">Verwijderen</button>
+    </div>
+  </div>
+  {% else %}<p>Nog geen boeken. Klik op "+ Nieuw boek".</p>{% endfor %}
+</div>
+{% if oob %}<div id="form-area" hx-swap-oob="true"></div>{% endif %}
