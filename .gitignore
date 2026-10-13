@@ -4,3 +4,4 @@ __pycache__/
 *.db
 uploads/
 *.log
+monitoring/wazuh-docker/
