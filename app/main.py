@@ -1,5 +1,6 @@
 """SF Dojo – FastAPI-app: publieke site + beheerpaneel. Alle routes staan in dit bestand."""
 import calendar
+import json
 import logging
 import warnings
 import os
@@ -7,10 +8,10 @@ import re
 import time
 from html import escape
 import secrets
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,13 +19,14 @@ warnings.filterwarnings("ignore", message="The httpx module is deprecated")   # 
 import segno
 from authlib.integrations.starlette_client import OAuth
 from markupsafe import Markup
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import auth, crud
 from .database import Base, SessionLocal, engine, get_db
 from .i18n import LANGS, NAMES, TEXT
-from .models import Book, Closure, Media, Post, Section, Totp, User
+from .models import Book, Closure, Media, Post, ResetToken, Section, Totp, User, UserMeta, utcnow
 
 BASE = Path(__file__).parent
 HTTPS = os.getenv("HTTPS_ONLY", "0") == "1"
@@ -32,8 +34,12 @@ SECRET = os.getenv("SECRET_KEY")
 if not SECRET:
     raise RuntimeError("SECRET_KEY ontbreekt: kopieer .env.example naar .env en vul die in.")
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
-                    handlers=[logging.StreamHandler(), logging.FileHandler(os.getenv("LOG_FILE") or "sfdojo-events.log")])
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+EVENT_FILE = os.getenv("LOG_FILE") or "sfdojo-events.log"
+_ev = logging.FileHandler(EVENT_FILE)
+_ev.setFormatter(logging.Formatter("%(message)s"))          # zuivere JSON, één event per regel (voor Wazuh)
+logging.getLogger("sfdojo").addHandler(_ev)
+logging.getLogger("kafka").setLevel(logging.WARNING)       # kafka-python is erg spraakzaam
 Base.metadata.create_all(engine)
 
 # ---- inloggen: AUTH_MODE = password | password_sso (wachtwoord + Google/Microsoft) | sso (alleen Google/Microsoft)
@@ -68,6 +74,7 @@ if AUTH_MODE == "auto":                    # Google/Microsoft staat uit, tot cli
     AUTH_MODE = "password_sso" if (PROVIDERS and PUBLIC_URL and admin_emails()) else "password"
     if PROVIDERS and AUTH_MODE == "password":
         logging.getLogger("sfdojo").warning("Google/Microsoft is ingevuld maar PUBLIC_URL of ADMINx_EMAIL ontbreekt: SSO blijft uit.")
+MAIL_ENABLED = bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_FROM") and PUBLIC_URL)   # mail-herstel vraagt een vast PUBLIC_URL (tegen Host-header-trucs)
 USE_TOTP = AUTH_MODE == "password"         # bij Google/Microsoft-login zorgt dat account zelf voor de tweede stap
 REQUIRE_2FA = USE_TOTP and os.getenv("REQUIRE_2FA", "1") == "1"      # beheerders moeten tweestapsverificatie instellen
 if AUTH_MODE not in ("password", "password_sso", "sso"):
@@ -261,6 +268,22 @@ def link_items(page, lang):
         db.close()
 
 
+def card_link(cell):
+    """Vierde kolom van een prijskaartje: een https-adres, /pagina, of [bestand: x.pdf Naam] -> knop."""
+    cell = (cell or "").strip()
+    if not cell:
+        return None
+    m = MEDIA_RE.match(cell)
+    if m and m.group(1) == "bestand":
+        return dict(url=f"/media/{m.group(2)}", label=m.group(3), file=True)
+    u = normalize_link(cell)
+    return dict(url=u, label=None, file=False) if u else None
+
+
+_w = normalize_link(os.getenv("WAZUH_URL", ""))
+WAZUH_URL = _w if _w and _w.startswith(("http://", "https://")) else "https://localhost:5601"
+
+
 def faq_items(lang):
     db = SessionLocal()
     try:
@@ -305,7 +328,8 @@ def excerpt(text, n=180):
 
 templates.env.globals.update(blocks=blocks, schedule=schedule, footer_links=footer_links, page_labels=PAGE_LABELS,
                              lang_names=NAMES, year=lambda: datetime.now().year, link_items=link_items, excerpt=excerpt,
-                             faq_items=faq_items, promo=promo, books=books)
+                             faq_items=faq_items, promo=promo, books=books, card_link=card_link,
+                             wazuh_url=WAZUH_URL, mail_enabled=MAIL_ENABLED)
 templates.env.filters["linkify"] = linkify
 
 
@@ -331,6 +355,12 @@ async def need_login(request: Request, exc):
     return RedirectResponse("/admin/login", 303)
 
 
+@app.exception_handler(auth.RateLimited)
+async def too_many(request: Request, exc):
+    msg = '<span class="err">Te veel verzoeken kort na elkaar. Wacht even en probeer het opnieuw.</span>'
+    return HTMLResponse(msg, status_code=200 if request.headers.get("hx-request") else 429)
+
+
 @app.exception_handler(auth.SetupRequired)
 async def need_setup(request: Request, exc):
     if request.headers.get("hx-request"):
@@ -346,11 +376,21 @@ def get_lang(request: Request) -> str:
     return c if c in LANGS else "nl"
 
 
+def owner_id():
+    """De eigenaar (de eerst aangemaakte beheerder) mag gebruikers en monitoring beheren."""
+    db = SessionLocal()
+    try:
+        return db.query(func.min(User.id)).scalar()
+    finally:
+        db.close()
+
+
 def render(request: Request, template: str, **ctx):
     lang = get_lang(request)
     theme = request.cookies.get("theme", "")
     ctx.update(lang=lang, t=TEXT[lang], langs=LANGS, theme=theme if theme in THEMES else "",
-               csrf=auth.csrf_token(request) if request.url.path.startswith("/admin") else "")
+               csrf=auth.csrf_token(request) if request.url.path.startswith("/admin") else "",
+               is_owner=request.url.path.startswith("/admin") and request.session.get("uid") == owner_id())
     resp = templates.TemplateResponse(request, template, ctx)
     if request.query_params.get("lang") in LANGS:       # ?lang=fr onthouden in een cookie
         resp.set_cookie("lang", lang, max_age=31536000, samesite="lax", secure=HTTPS, httponly=True)
@@ -489,7 +529,8 @@ def blog_post(request: Request, pid: int, db: Session = Depends(get_db)):
 
 # ---------------------------------------------------------------- beheer: login
 def _login_page(request, error=None):
-    return render(request, "admin/login.html", mode=AUTH_MODE, providers=PROVIDERS, error=error)
+    return render(request, "admin/login.html", mode=AUTH_MODE, providers=PROVIDERS, error=error, mail=MAIL_ENABLED,
+                  reset_done=request.query_params.get("reset") == "1")
 
 
 def _has_totp(db, user):
@@ -501,10 +542,13 @@ def _start_session(request, db, user, ip, via):
     request.session.clear()                             # nieuwe sessie na login
     request.session["uid"] = user.id
     request.session["ph"] = auth.session_mark(user)
+    meta = db.get(UserMeta, user.id)
+    if meta and meta.must_change:
+        request.session["must_pw"] = 1                  # tijdelijk wachtwoord: eerst een eigen kiezen
     if REQUIRE_2FA and not _has_totp(db, user):
         request.session["must_2fa"] = 1                 # eerst tweestapsverificatie instellen
     auth.clear_failures(db, ip)
-    crud.log_event("login_ok", user=user.username, ip=ip, via=via)
+    crud.log_event("login_success", user=user.username, ip=ip, via=via)
 
 
 def _finish(request, db, user, ip, via, htmx):
@@ -531,7 +575,7 @@ def login_page(request: Request):
     return _login_page(request)
 
 
-@app.post("/admin/login", dependencies=[Depends(auth.csrf_guard)])
+@app.post("/admin/login", dependencies=[Depends(auth.rate_limit("login", 20, 60)), Depends(auth.csrf_guard)])
 def login(request: Request, username: str = Form(""), password: str = Form(""),
           db: Session = Depends(get_db)):
     if AUTH_MODE == "sso":
@@ -545,7 +589,7 @@ def login(request: Request, username: str = Form(""), password: str = Form(""),
             crud.log_event("login_password_ok", user=user.username, ip=ip)
             return Response(headers={"HX-Redirect": "/admin/sso"})
         return _finish(request, db, user, ip, "password", htmx=True)
-    crud.log_event("login_fail" if status == "fail" else "login_blocked", ip=ip, user=username[:30])
+    crud.log_event("login_failed" if status == "fail" else "login_blocked", ip=ip, user=username[:30])
     if status == "banned":
         msg = f"Te veel mislukte pogingen. Dit toestel is geblokkeerd tot {extra:%d-%m-%Y %H:%M} (UTC)."
     else:
@@ -560,7 +604,7 @@ def sso_step(request: Request, db: Session = Depends(get_db)):
     return render(request, "admin/sso.html", providers=PROVIDERS)
 
 
-@app.get("/admin/sso/{provider}")
+@app.get("/admin/sso/{provider}", dependencies=[Depends(auth.rate_limit("sso", 30, 60))])
 async def sso_start(request: Request, provider: str, db: Session = Depends(get_db)):
     if AUTH_MODE == "password" or provider not in PROVIDERS:
         raise HTTPException(404)
@@ -590,8 +634,7 @@ async def sso_callback(request: Request, provider: str, db: Session = Depends(ge
     email = str(claims.get("email") or claims.get("preferred_username") or "").strip().lower()
     if provider == "google" and claims.get("email_verified") is not True:
         email = ""
-    name = admin_emails().get(email)
-    user = db.query(User).filter_by(username=name).first() if name else None
+    user = user_by_email(db, email)
     if not user or (pending and pending.id != user.id):
         auth.record_failure(db, ip)                     # telt mee voor dezelfde IP-ban als verkeerde wachtwoorden
         crud.log_event("sso_denied", provider=provider, ip=ip, email=email[:60])
@@ -619,7 +662,7 @@ def twofa_page(request: Request, db: Session = Depends(get_db)):
     return render(request, "admin/totp.html")
 
 
-@app.post("/admin/2fa", dependencies=[Depends(auth.csrf_guard)])
+@app.post("/admin/2fa", dependencies=[Depends(auth.rate_limit("2fa", 20, 60)), Depends(auth.csrf_guard)])
 def twofa_verify(request: Request, code: str = Form(""), db: Session = Depends(get_db)):
     user = _totp_pending(request, db)
     if not user:
@@ -648,11 +691,11 @@ def twofa_verify(request: Request, code: str = Form(""), db: Session = Depends(g
 @app.get("/admin/password", response_class=HTMLResponse)
 def password_page(request: Request, user=Depends(auth.current_user), db: Session = Depends(get_db)):
     return render(request, "admin/password.html", user=user, done=request.query_params.get("done") == "1",
-                  must_setup=bool(request.session.get("must_2fa")), enabled=_has_totp(db, user), require2fa=REQUIRE_2FA,
+                  must_setup=bool(request.session.get("must_2fa")), must_pw=bool(request.session.get("must_pw")), enabled=_has_totp(db, user), require2fa=REQUIRE_2FA,
                   use_totp=USE_TOTP, mode=AUTH_MODE)
 
 
-@app.post("/admin/password", dependencies=[Depends(auth.csrf_guard)])
+@app.post("/admin/password", dependencies=[Depends(auth.rate_limit("pw", 10, 60)), Depends(auth.csrf_guard)])
 def password_change(request: Request, current: str = Form(""), new: str = Form(""), confirm: str = Form(""),
                     user=Depends(auth.current_user), db: Session = Depends(get_db)):
     def err(text):
@@ -671,7 +714,11 @@ def password_change(request: Request, current: str = Form(""), new: str = Form("
         crud.log_event("password_change_fail", user=user.username, ip=ip)
         return err(f"Het huidige wachtwoord klopt niet. Nog {extra} poging(en) voor een blokkade.")
     user.password_hash = auth.hash_password(new)
+    meta = db.get(UserMeta, user.id)
+    if meta:
+        meta.must_change = False
     db.commit()
+    request.session.pop("must_pw", None)
     request.session["ph"] = auth.session_mark(user)     # deze sessie blijft geldig, alle andere niet
     crud.log_event("password_changed", user=user.username, ip=ip)
     return Response(headers={"HX-Redirect": "/admin/password?done=1"})
@@ -1288,3 +1335,232 @@ def book_delete(request: Request, bid: int, user=Depends(auth.current_user), db:
         db.delete(b)
         db.commit()
     return _books_admin(request, db, "Verwijderd.")
+
+
+# ---------------------------------------------------------------- wachtwoord vergeten (e-mail): hash + 15 min + eenmalig
+def user_by_email(db, email):
+    """Beheerder bij een e-mailadres (uit de database, of uit ADMINx_EMAIL in .env)."""
+    meta = db.query(UserMeta).filter(func.lower(UserMeta.email) == email).first() if email else None
+    if meta:
+        return db.get(User, meta.user_id)
+    name = admin_emails().get(email)
+    return db.query(User).filter_by(username=name).first() if name else None
+
+
+def _token_row(db, token):
+    row = db.query(ResetToken).filter(ResetToken.token_hash == auth.hash_token(token[:200])).first()
+    return row if row and not row.used and row.expires > utcnow() else None
+
+
+@app.get("/admin/forgot", response_class=HTMLResponse)
+def forgot_page(request: Request):
+    if not MAIL_ENABLED:
+        return RedirectResponse("/admin/login", 303)
+    return render(request, "admin/forgot.html")
+
+
+@app.post("/admin/forgot", dependencies=[Depends(auth.rate_limit("forgot", 5, 600)), Depends(auth.csrf_guard)])
+def forgot(request: Request, background: BackgroundTasks, who: str = Form(""), db: Session = Depends(get_db)):
+    """Antwoordt ALTIJD hetzelfde, ook voor onbekende accounts (geen gebruikers-enumeratie)."""
+    ip, who = auth.client_ip(request), who.strip().lower()[:200]
+    user = db.query(User).filter(User.username == who).first() or user_by_email(db, who)
+    meta = db.get(UserMeta, user.id) if user else None
+    email = meta.email if meta and meta.email else ""
+    crud.log_event("password_reset_requested", ip=ip, found=bool(email))
+    if MAIL_ENABLED and email:
+        recent = db.query(ResetToken).filter(ResetToken.user_id == user.id, ResetToken.created > utcnow() - timedelta(hours=1)).count()
+        if recent < 3:
+            db.query(ResetToken).filter(ResetToken.user_id == user.id, ResetToken.used == False).update({"used": True})  # noqa: E712
+            token = secrets.token_urlsafe(32)
+            db.add(ResetToken(user_id=user.id, token_hash=auth.hash_token(token), expires=utcnow() + timedelta(minutes=15)))
+            db.commit()
+            body = (f"Hallo,\n\nIemand (IP {ip}) vroeg om het wachtwoord van het SF Dojo-beheer opnieuw in te stellen.\n\n"
+                    f"Klik hier om een nieuw wachtwoord te kiezen (15 minuten geldig, één keer te gebruiken):\n{PUBLIC_URL}/admin/reset/{token}\n\n"
+                    "Was jij dit niet? Negeer deze mail: er verandert niets.\n")
+            background.add_task(crud.send_mail, email, "SF Dojo: wachtwoord opnieuw instellen", body)
+    return HTMLResponse('<span class="ok">Als dit account bestaat en een e-mailadres heeft, krijg je zo een mail met een link. '
+                        'De link is 15 minuten geldig.</span>', background=background)
+
+
+@app.get("/admin/reset/{token}", response_class=HTMLResponse)
+def reset_page(request: Request, token: str, db: Session = Depends(get_db)):
+    row = _token_row(db, token)
+    if not row:
+        return render(request, "admin/reset.html", valid=False)
+    user = db.get(User, row.user_id)
+    return render(request, "admin/reset.html", valid=True, token=token, need_code=USE_TOTP and _has_totp(db, user))
+
+
+@app.post("/admin/reset/{token}", dependencies=[Depends(auth.rate_limit("reset", 10, 600)), Depends(auth.csrf_guard)])
+def reset_do(request: Request, token: str, background: BackgroundTasks, new: str = Form(""), confirm: str = Form(""),
+             code: str = Form(""), db: Session = Depends(get_db)):
+    def err(text):
+        return HTMLResponse(f'<span class="err">{text}</span>')
+    ip = auth.client_ip(request)
+    until = auth.banned_until(db, ip)
+    if until:
+        return err(f"Te veel mislukte pogingen. Geblokkeerd tot {until:%d-%m-%Y %H:%M} (UTC).")
+    row = _token_row(db, token)
+    if not row:
+        return err("Deze link is ongeldig of verlopen. Vraag een nieuwe aan.")
+    user = db.get(User, row.user_id)
+    if new != confirm:
+        return err("De twee wachtwoorden zijn niet gelijk.")
+    if not 12 <= len(new) <= 72:
+        return err("Kies een wachtwoord van 12 tot 72 tekens.")
+    if USE_TOTP and _has_totp(db, user):                # e-mailtoegang alleen is niet genoeg als 2FA aan staat
+        t = db.get(Totp, user.id)
+        step = auth.verify_totp(t.secret, code[:20], t.last_step)
+        if step is not None:
+            t.last_step = step
+        elif not auth.use_recovery(t, code[:20]):
+            auth.record_failure(db, ip)
+            crud.log_event("2fa_fail", user=user.username, ip=ip, context="password_reset")
+            return err("De code uit je authenticator-app (of een herstelcode) klopt niet.")
+    user.password_hash = auth.hash_password(new)
+    meta = db.get(UserMeta, user.id)
+    if meta:
+        meta.must_change = False
+    db.query(ResetToken).filter(ResetToken.user_id == user.id).update({"used": True})
+    db.commit()
+    request.session.clear()
+    crud.log_event("password_reset_done", user=user.username, ip=ip)
+    if meta and meta.email and MAIL_ENABLED:
+        background.add_task(crud.send_mail, meta.email, "SF Dojo: je wachtwoord is gewijzigd",
+                            f"Het wachtwoord van je SF Dojo-beheeraccount is net gewijzigd (IP {ip}).\nWas jij dit niet? Neem meteen contact op met de eigenaar van de site.\n")
+    return Response(headers={"HX-Redirect": "/admin/login?reset=1"}, background=background)
+
+
+# ---------------------------------------------------------------- beheer: gebruikers (alleen eigenaar) en monitoring
+USERNAME_RE = re.compile(r"^[a-z0-9_.-]{3,30}$")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+SECURITY_EVENTS = {"login_success", "login_failed", "login_blocked", "ip_banned", "2fa_fail", "2fa_enabled", "2fa_disabled",
+                   "2fa_recovery_used", "sso_denied", "rate_limited", "password_changed", "password_reset_requested",
+                   "password_reset_done", "temp_password_issued", "user_updated"}
+
+
+def owner_only(user=Depends(auth.current_user)):
+    if user.id != owner_id():
+        raise HTTPException(403)
+    return user
+
+
+def _users(request, db, msg=None, temp=None, bad=False):
+    rows = []
+    for u in db.query(User).order_by(User.id):
+        meta, t = db.get(UserMeta, u.id), db.get(Totp, u.id)
+        rows.append(dict(u=u, email=meta.email if meta else "", must_change=bool(meta and meta.must_change), totp=bool(t and t.enabled)))
+    return render(request, "admin/users_list.html", rows=rows, msg=msg, temp=temp, bad=bad, owner=owner_id())
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+def users_page(request: Request, user=Depends(owner_only), db: Session = Depends(get_db)):
+    rows = []
+    for u in db.query(User).order_by(User.id):
+        meta, t = db.get(UserMeta, u.id), db.get(Totp, u.id)
+        rows.append(dict(u=u, email=meta.email if meta else "", must_change=bool(meta and meta.must_change), totp=bool(t and t.enabled)))
+    return render(request, "admin/users.html", user=user, rows=rows, msg=None, temp=None, bad=False, owner=owner_id())
+
+
+@app.post("/admin/users/{uid}", dependencies=[Depends(auth.csrf_guard)])
+def user_update(request: Request, uid: int, username: str = Form(""), email: str = Form(""),
+                user=Depends(owner_only), db: Session = Depends(get_db)):
+    target = db.get(User, uid)
+    username, email = username.strip().lower(), email.strip().lower()
+    if not target:
+        raise HTTPException(404)
+    if not USERNAME_RE.match(username):
+        return _users(request, db, "Een gebruikersnaam bestaat uit 3 tot 30 letters, cijfers, punt, streepje of underscore.", bad=True)
+    if db.query(User).filter(User.username == username, User.id != uid).first():
+        return _users(request, db, "Die gebruikersnaam is al in gebruik.", bad=True)
+    if email and (not EMAIL_RE.match(email) or len(email) > 200):
+        return _users(request, db, "Dat e-mailadres lijkt niet te kloppen.", bad=True)
+    other = db.query(UserMeta).filter(func.lower(UserMeta.email) == email, UserMeta.user_id != uid).first() if email else None
+    if other:
+        return _users(request, db, "Dat e-mailadres hoort al bij een andere beheerder.", bad=True)
+    target.username = username
+    meta = db.get(UserMeta, uid) or UserMeta(user_id=uid, email="", must_change=False)
+    meta.email = email
+    db.add(meta)
+    db.commit()
+    crud.log_event("user_updated", by=user.username, user=username, ip=auth.client_ip(request))
+    return _users(request, db, f"Opgeslagen voor {username}.")
+
+
+@app.post("/admin/users/{uid}/temp-password", dependencies=[Depends(auth.csrf_guard)])
+def user_temp_password(request: Request, uid: int, user=Depends(owner_only), db: Session = Depends(get_db)):
+    target = db.get(User, uid)
+    if not target or target.id == user.id:
+        return _users(request, db, "Voor je eigen wachtwoord gebruik je de pagina Beveiliging.", bad=True)
+    temp = secrets.token_urlsafe(12)
+    target.password_hash = auth.hash_password(temp)
+    meta = db.get(UserMeta, uid) or UserMeta(user_id=uid, email="")
+    meta.must_change = True
+    db.add(meta)
+    db.query(ResetToken).filter(ResetToken.user_id == uid).update({"used": True})
+    db.commit()
+    crud.log_event("temp_password_issued", by=user.username, user=target.username, ip=auth.client_ip(request))
+    return _users(request, db, f"Tijdelijk wachtwoord voor {target.username}: geef het persoonlijk door. Het is maar één keer zichtbaar en moet bij de eerste login gewijzigd worden.", temp=temp)
+
+
+@app.post("/admin/users/{uid}/reset-2fa", dependencies=[Depends(auth.csrf_guard)])
+def user_reset_2fa(request: Request, uid: int, user=Depends(owner_only), db: Session = Depends(get_db)):
+    target = db.get(User, uid)
+    if not target:
+        raise HTTPException(404)
+    db.query(Totp).filter(Totp.user_id == uid).delete()
+    db.commit()
+    crud.log_event("2fa_disabled", by=user.username, user=target.username, ip=auth.client_ip(request))
+    return _users(request, db, f"Tweestapsverificatie van {target.username} is gereset: bij de volgende login stelt die persoon het opnieuw in.")
+
+
+def recent_events(n=40):
+    """Laatste beveiligingsgebeurtenissen uit het logbestand (staart van het bestand)."""
+    try:
+        with open(EVENT_FILE, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 200_000))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return []
+    out = []
+    for line in reversed(lines):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(d, dict) and d.get("event") in SECURITY_EVENTS:
+            out.append(d)
+            if len(out) >= n:
+                break
+    return out
+
+
+@app.get("/admin/monitor", response_class=HTMLResponse)
+def monitor_page(request: Request, user=Depends(owner_only)):
+    return render(request, "admin/monitor.html", user=user, events=recent_events())
+
+
+@app.post("/admin/media/price-insert", dependencies=[Depends(auth.csrf_guard)])
+def price_insert(name: str = Form(""), price: str = Form(""), note: str = Form(""), link: str = Form(""), pdf: str = Form(""),
+                 content: str = Form(""), field: str = Form(""), user=Depends(auth.current_user), db: Session = Depends(get_db)):
+    """Voegt een prijskaartje (tabelrij) toe aan de tekst: naam | prijs | opmerking | pdf of link."""
+    clean = lambda v: re.sub(r"[|\r\n\[\]]", " ", v).strip()[:120]
+    name, price, note = clean(name), clean(price), clean(note)
+    if not name or not price:
+        return _textarea(field, content, "Vul minstens een naam en een prijs in.", False)
+    cell = ""
+    if pdf:
+        m = db.query(Media).filter(Media.name == pdf, Media.kind == "file").first()
+        cell = media_tag(m) if m else ""
+    elif link.strip():
+        cell = normalize_link(link) or ""
+        if not cell or "|" in cell:
+            return _textarea(field, content, "Die link klopt niet. Gebruik bv. https://www.voorbeeld.be of /contact.", False)
+    paras = content.rstrip().split("\n\n") if content.strip() else []
+    row = " | ".join([name, price, note, cell])
+    if paras and all("|" in l for l in paras[-1].split("\n") if l.strip()):
+        paras[-1] = paras[-1].rstrip() + "\n" + row
+    else:
+        paras.append("Formule | Prijs | Opmerking | Link\n" + row)
+    return _textarea(field, "\n\n".join(paras), "Prijskaartje toegevoegd onderaan de tabel.")

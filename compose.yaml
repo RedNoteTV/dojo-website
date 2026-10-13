@@ -28,10 +28,19 @@ services:
       MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
       MICROSOFT_TENANT: ${MICROSOFT_TENANT:-consumers}
       KAFKA_BROKER: ${KAFKA_BROKER:-}
+      LOG_FILE: /logs/sfdojo-events.log
+      WAZUH_URL: ${WAZUH_URL:-https://localhost:5601}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-1}
     ports:
       - "127.0.0.1:8000:8000"          # rechtstreeks, alleen vanaf deze computer (handig voor testen)
     volumes:
-      - sfdojo-data:/data              # database, uploads, logs en sleutel: hier staat alles wat bewaard moet worden
+      - sfdojo-data:/data              # database, uploads en sleutel: hier staat alles wat bewaard moet worden
+      - sfdojo-logs:/logs              # beveiligingsgebeurtenissen (JSON): hier leest Wazuh uit
     read_only: true
     tmpfs:
       - /tmp
@@ -55,8 +64,13 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data               # hier bewaart Caddy je https-certificaten
       - caddy-config:/config
+      - caddy-logs:/var/log/caddy      # toegangslogs (JSON): hier leest Wazuh uit
 
 volumes:
   sfdojo-data:
+  sfdojo-logs:
+    name: sfdojo-logs                # vaste naam, zodat Wazuh (apart project) dezelfde map kan lezen
   caddy-data:
   caddy-config:
+  caddy-logs:
+    name: caddy-logs

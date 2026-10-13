@@ -101,3 +101,22 @@ class Book(Base):
     cover = Column(String(40), default="")
     link_eu = Column(String(500), default="")
     link_world = Column(String(500), default="")
+
+
+class UserMeta(Base):
+    """Extra gegevens per beheerder: e-mailadres voor wachtwoordherstel, en 'moet wachtwoord eerst wijzigen' (na een tijdelijk wachtwoord)."""
+    __tablename__ = "user_meta"
+    user_id = Column(Integer, primary_key=True)
+    email = Column(String(200), default="")
+    must_change = Column(Boolean, default=False)
+
+
+class ResetToken(Base):
+    """Herstellink voor een wachtwoord: alleen de hash wordt bewaard, 15 minuten geldig, één keer te gebruiken."""
+    __tablename__ = "reset_tokens"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False)
+    expires = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False)
+    created = Column(DateTime, default=utcnow)

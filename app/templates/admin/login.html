@@ -5,6 +5,7 @@
 <main class="narrow">
   <h1>SF Dojo – Beheer</h1>
   {% if error %}<p class="err" role="alert">{{ error }}</p>{% endif %}
+  {% if reset_done %}<p class="ok" role="status">Je wachtwoord is gewijzigd. Log nu in met je nieuwe wachtwoord.</p>{% endif %}
   {% if mode != 'sso' %}
   <form class="card" hx-post="/admin/login" hx-target="#msg" hx-swap="innerHTML">
     <label for="u">Gebruikersnaam</label>
@@ -14,6 +15,7 @@
     <p id="msg" role="alert"></p>
     <button class="btn" type="submit">{{ 'Volgende stap' if mode == 'password_sso' else 'Inloggen' }}</button>
     {% if mode == 'password_sso' %}<p class="hint">Daarna bevestig je met Google of Microsoft.</p>{% endif %}
+    {% if mail %}<p class="hint"><a href="/admin/forgot">Wachtwoord vergeten?</a></p>{% endif %}
   </form>
   {% else %}
   <div class="card">

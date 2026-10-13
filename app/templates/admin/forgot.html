@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Wachtwoord vergeten{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<main class="narrow">
+  <h1>Wachtwoord vergeten</h1>
+  <form class="card" hx-post="/admin/forgot" hx-target="#msg" hx-swap="innerHTML">
+    <label for="who">Gebruikersnaam of e-mailadres</label>
+    <input id="who" name="who" autocomplete="username" autocapitalize="none" required autofocus>
+    <p id="msg" role="status"></p>
+    <button class="btn" type="submit">Stuur me een link</button>
+    <p class="hint">Je krijgt een mail met een link die 15 minuten werkt. Staat er geen e-mailadres bij je account, of is je telefoon met de authenticator kwijt? Vraag het aan de eigenaar van de site.</p>
+  </form>
+  <p><a href="/admin/login">← Terug naar inloggen</a></p>
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

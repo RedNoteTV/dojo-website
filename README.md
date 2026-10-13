@@ -109,3 +109,11 @@ De container heeft zijn eigen database: de wachtwoorden en instellingen van je l
 - **Skool-banner:** pagina "Home: banner onderaan" bij Teksten. Titel = kop; tekst = uitleg, daarna een lege regel en dan `Knoptekst | https://www.skool.com/jouw-course`.
 - **Prijzen:** tabellen op de pagina Prijzen worden prijskaartjes (`Formule | Prijs | Opmerking`). Een pdf met details voeg je toe met "Invoegen" in het tekstformulier.
 - Een gewone `python seed.py` vult FAQ, banner en boek aan als ze ontbreken; er wordt niets gewist.
+
+## Nieuw in v7
+- **Prijskaartjes met download of link:** in het tekstformulier staat nu "Prijskaartje toevoegen": naam, prijs, opmerking en een pdf (uit je uploads) of een link. Op de pagina Prijzen krijgt dat kaartje een knop (download of "Meer info"). In de tabel zelf is het de 4e kolom: `Formule | Prijs | Opmerking | Link`.
+- **Betalen, algemeen:** de tekst noemt nu elke bank (KBC, ING, Belfius, BNP Paribas Fortis ...) en is vertaald. Een oude, nooit aangepaste voorbeeldtekst wordt bij `python seed.py` vervangen; jouw eigen tekst blijft staan.
+- **Beheermenu met 3 streepjes** op smalle schermen.
+- **Gebruikers (eigenaar):** Beveiliging -> Gebruikers beheren: naam en e-mailadres wijzigen, tijdelijk wachtwoord maken (moet bij de eerste login gewijzigd worden), 2FA resetten. De eigenaar is de eerst aangemaakte beheerder.
+- **Wachtwoord herstellen:** per e-mail (stel `SMTP_*` en `PUBLIC_URL` in `.env` in; link 15 min geldig, eenmalig, alleen als hash bewaard; met 2FA is ook een code nodig) of via de opdrachtregel: `python seed.py --reset-password NAAM`.
+- **Monitoring:** knop "Open Wazuh" en een overzicht van de laatste beveiligingsgebeurtenissen (Beveiliging -> Monitoring). Wazuh en Kafka opzetten: `notes/monitoring.md`. Wat getest is en wat niet: `notes/security_checklist.md`.

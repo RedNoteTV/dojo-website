@@ -1,0 +1,20 @@
+<div id="users-list">
+  {% if msg %}<p class="{{ 'err' if bad else 'ok' }}" role="status">{{ msg }}</p>{% endif %}
+  {% if temp %}<div class="card tempbox"><strong>Tijdelijk wachtwoord</strong><p><code class="big">{{ temp }}</code></p><p class="hint">Geef het persoonlijk door (niet via mail of chat). Dit scherm toont het maar één keer.</p></div>{% endif %}
+  {% for r in rows %}
+  <form class="card" hx-post="/admin/users/{{ r.u.id }}" hx-target="#users-list" hx-swap="outerHTML">
+    <h2>{{ r.u.username }}{% if r.u.id == owner %} <small>(eigenaar)</small>{% endif %}</h2>
+    <p class="hint">{{ 'Tweestapsverificatie staat aan' if r.totp else 'Tweestapsverificatie nog niet ingesteld' }}{% if r.must_change %} · moet bij de volgende login een eigen wachtwoord kiezen{% endif %}</p>
+    <div class="row">
+      <div><label for="un{{ r.u.id }}">Gebruikersnaam</label><input id="un{{ r.u.id }}" name="username" required pattern="[a-z0-9_.\-]{3,30}" value="{{ r.u.username }}"></div>
+      <div><label for="em{{ r.u.id }}">E-mailadres</label><input id="em{{ r.u.id }}" name="email" type="email" maxlength="200" value="{{ r.email }}"></div>
+    </div>
+    <p></p>
+    <div class="row">
+      <button class="btn mini" type="submit">Opslaan</button>
+      {% if r.u.id != owner %}<button class="btn mini" type="button" hx-post="/admin/users/{{ r.u.id }}/temp-password" hx-confirm="Een tijdelijk wachtwoord maken? Het huidige wachtwoord van {{ r.u.username }} werkt dan niet meer.">Tijdelijk wachtwoord maken</button>{% endif %}
+      <button class="btn mini danger" type="button" hx-post="/admin/users/{{ r.u.id }}/reset-2fa" hx-confirm="Tweestapsverificatie van {{ r.u.username }} resetten?">2FA resetten</button>
+    </div>
+  </form>
+  {% endfor %}
+</div>

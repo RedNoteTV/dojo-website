@@ -1,0 +1,16 @@
+<div class="picker">
+  <strong>Prijskaartje toevoegen (voor de pagina Prijzen)</strong>
+  <div class="row">
+    <div><label for="pr-name">Naam</label><input id="pr-name" name="name" maxlength="120" placeholder="bv. Volwassenen"></div>
+    <div><label for="pr-price">Prijs</label><input id="pr-price" name="price" maxlength="120" placeholder="bv. € 570 per jaar"></div>
+  </div>
+  <label for="pr-note">Opmerking (mag leeg)</label>
+  <input id="pr-note" name="note" maxlength="120">
+  <div class="row">
+    <div><label for="pr-pdf">Download (pdf)</label>
+      <select id="pr-pdf" name="pdf"><option value="">(geen)</option>{% for m in media_items() if m.kind == 'file' %}<option value="{{ m.name }}">{{ m.caption or ('PDF ' ~ m.name[:6]) }}</option>{% endfor %}</select></div>
+    <div><label for="pr-link">Of een link</label><input id="pr-link" name="link" maxlength="300" placeholder="https://..."></div>
+  </div>
+  <p><button type="button" class="btn mini" hx-post="/admin/media/price-insert" hx-include="#pr-name, #pr-price, #pr-note, #pr-pdf, #pr-link, #f-content" hx-vals='{"field": "f-content"}' hx-target="#f-content" hx-swap="outerHTML">Prijskaartje toevoegen</button></p>
+  <p class="hint">Het kaartje komt onderaan de tabel in het tekstveld. Een pdf moet eerst geüpload zijn (hierboven bij "Foto, video, pdf of YouTube toevoegen"). Pagina Prijzen kiezen en opslaan nog niet vergeten.</p>
+</div>

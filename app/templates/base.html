@@ -188,6 +188,13 @@ code{background:var(--bg);padding:.1rem .4rem;border-radius:4px;word-break:break
 .book h2{margin:.1rem 0}
 .book .price{font-size:1.2rem;font-weight:700}
 @media(max-width:600px){.book{grid-template-columns:1fr}.book-cover{max-width:220px}}
+/* beheer: hamburger, gebruikers, monitoring */
+.menu .row{margin-left:auto}
+@media(max-width:1180px){.menu .row{flex-direction:column;align-items:stretch;margin-left:0;width:100%}.menu .row .btn{text-align:center;width:100%}}
+.tempbox{border:2px solid var(--accent)}
+code.big{font-size:1.5rem;padding:.4rem .8rem;display:inline-block}
+.evt{display:inline-block;padding:.05rem .55rem;border-radius:999px;font-size:.85rem;font-weight:700;background:var(--line);color:var(--text)}
+.evt.bad{background:#d1495b;color:#fff}.evt.warn{background:#d9a91f;color:#1b1610}.evt.good{background:#3f9d6b;color:#fff}
 /* beheer: grote velden, hoog contrast */
 label{display:block;font-weight:700;margin:.9rem 0 .2rem}
 input,select,textarea{width:100%;font:inherit;padding:.7rem;border:2px solid var(--muted);border-radius:8px;background:var(--card);color:var(--text)}

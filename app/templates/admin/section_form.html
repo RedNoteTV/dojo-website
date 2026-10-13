@@ -21,6 +21,7 @@ Dag | Les | Uur
 Maandag | Karate | 19:00-20:00</p>
 </form>
 {% with field='f-content' %}{% include "admin/media_picker.html" %}{% endwith %}
+{% include "admin/price_helper.html" %}
 <div id="form-msg" role="alert"></div>
 <div class="row"><button class="btn" type="submit" form="sf">Opslaan</button>
   {% if edit_id %}<button class="btn danger" type="button" hx-delete="/admin/sections/{{ edit_id }}" hx-confirm="Zeker weten? Dit verdwijnt meteen van de website." hx-target="#sections-list" hx-swap="outerHTML">Verwijderen</button>{% endif %}

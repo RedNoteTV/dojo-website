@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Nieuw wachtwoord{% endblock %}
+{% block header %}{% endblock %}
+{% block content %}
+<main class="narrow">
+  <h1>Nieuw wachtwoord</h1>
+  {% if not valid %}
+  <div class="card"><p class="err">Deze link is ongeldig of verlopen.</p><p><a class="btn" href="/admin/forgot">Nieuwe link aanvragen</a></p></div>
+  {% else %}
+  <form class="card" hx-post="/admin/reset/{{ token }}" hx-target="#msg" hx-swap="innerHTML">
+    <label for="n1">Nieuw wachtwoord</label>
+    <input id="n1" name="new" type="password" autocomplete="new-password" minlength="12" maxlength="72" required autofocus>
+    <label for="n2">Nog eens</label>
+    <input id="n2" name="confirm" type="password" autocomplete="new-password" minlength="12" maxlength="72" required>
+    {% if need_code %}<label for="cd">Code uit je authenticator-app (of een herstelcode)</label>
+    <input id="cd" name="code" autocomplete="one-time-code" maxlength="12" required>{% endif %}
+    <p class="hint">Minstens 12 tekens, bv. 3 of 4 losse woorden.</p>
+    <p id="msg" role="alert"></p>
+    <button class="btn" type="submit">Wachtwoord opslaan</button>
+  </form>
+  {% endif %}
+</main>
+{% endblock %}
+{% block footer %}{% endblock %}

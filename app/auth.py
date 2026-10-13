@@ -1,5 +1,6 @@
 """Login, sessies, CSRF en de escalerende IP-ban."""
 import base64
+import collections
 import hashlib
 import hmac
 import os
@@ -13,6 +14,7 @@ import bcrypt
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
+from . import crud
 from .database import get_db
 from .models import LoginBlock, User, utcnow
 
@@ -24,6 +26,35 @@ _DUMMY = bcrypt.hashpw(b"dummy", bcrypt.gensalt()).decode()  # zelfde rekentijd 
 
 class LoginRequired(Exception):
     pass
+
+
+class RateLimited(Exception):
+    pass
+
+
+_hits = {}
+
+
+def rate_limit(name: str, limit: int, seconds: int):
+    """Maximaal `limit` verzoeken per `seconds` per IP voor dit eindpunt (per werkproces; de ban per IP regelt de rest)."""
+    def dep(request: Request):
+        now, key = time.time(), (name, client_ip(request))
+        q = _hits.setdefault(key, collections.deque())
+        while q and q[0] < now - seconds:
+            q.popleft()
+        if len(_hits) > 5000:                      # geheugen opschonen
+            for k in [k for k, v in _hits.items() if not v or v[-1] < now - 3600]:
+                _hits.pop(k, None)
+        if len(q) >= limit:
+            crud.log_event("rate_limited", ip=key[1], endpoint=name)
+            raise RateLimited()
+        q.append(now)
+    return dep
+
+
+def hash_token(token: str) -> str:
+    """Herstellinks worden alleen als HMAC-hash bewaard: een gelekte database geeft geen bruikbare link."""
+    return hmac.new(os.environ["SECRET_KEY"].encode(), token.encode(), hashlib.sha256).hexdigest()
 
 
 class SetupRequired(Exception):
@@ -116,6 +147,7 @@ def record_failure(db: Session, ip: str):
         hours = min(BASE_BAN_HOURS * 2 ** (b.strikes - 1), MAX_BAN_HOURS)
         b.banned_until = utcnow() + timedelta(hours=hours)
         db.commit()
+        crud.log_event("ip_banned", ip=ip, strikes=b.strikes, hours=hours, until=b.banned_until.isoformat(timespec="seconds"))
         return "banned", b.banned_until
     db.commit()
     return "fail", MAX_FAILS - b.fails
@@ -149,7 +181,7 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     user = db.get(User, uid) if uid else None
     if not user or request.session.get("ph") != session_mark(user):
         raise LoginRequired()
-    if request.session.get("must_2fa") and not request.url.path.startswith(("/admin/password", "/admin/security")):
+    if (request.session.get("must_2fa") or request.session.get("must_pw")) and not request.url.path.startswith(("/admin/password", "/admin/security")):
         raise SetupRequired()
     return user
 

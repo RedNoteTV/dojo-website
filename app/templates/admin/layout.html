@@ -2,7 +2,9 @@
 {% block header %}
 <header><div class="bar">
   <a class="brand" href="/admin" style="color:var(--hfg)">SF Dojo – Beheer</a>
-  <span class="row">
+  <input type="checkbox" id="menu-toggle" class="menu-toggle" aria-label="Menu">
+  <label for="menu-toggle" class="burger"></label>
+  <div class="menu"><span class="row">
     <a class="btn mini" href="/admin">Teksten</a>
     <a class="btn mini" href="/admin/blog">Blog</a>
     <a class="btn mini" href="/admin/closures">Vakanties</a>
@@ -11,7 +13,7 @@
     <a class="btn mini" href="/admin/password">Beveiliging</a>
     <a class="btn mini" href="/" target="_blank" rel="noopener">Website</a>
     <button class="btn mini" hx-post="/admin/logout">Uitloggen ({{ user.username }})</button>
-  </span>
+  </span></div>
 </div></header>
 {% endblock %}
 {% block footer %}{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "admin/layout.html" %}
+{% block title %}Monitoring{% endblock %}
+{% block content %}
+<main>
+  <h1>Monitoring</h1>
+  <div class="card">
+    <h2>Wazuh</h2>
+    <p>Wazuh is het alarmsysteem dat deze beveiligingsgebeurtenissen en de toegangslogs van de website bewaakt. Het opent in een nieuw tabblad, zodat dit beheer open blijft staan.</p>
+    <p class="row"><a class="btn" href="{{ wazuh_url }}" target="_blank" rel="noopener">Open Wazuh</a><a class="btn" href="/admin/password">Terug naar Beveiliging</a></p>
+    <p class="hint">Opent niets? Dan draait Wazuh nog niet. Stappen: notes/monitoring.md. Het adres past je aan met WAZUH_URL in .env.</p>
+  </div>
+  <div class="card">
+    <h2>Laatste beveiligingsgebeurtenissen</h2>
+    {% if events %}
+    <div class="tbl"><table>
+      <thead><tr><th>Tijd (UTC)</th><th>Gebeurtenis</th><th>IP</th><th>Gebruiker</th></tr></thead>
+      <tbody>{% for e in events %}<tr>
+        <td data-label="Tijd (UTC)">{{ e.ts|replace('T', ' ')|replace('+00:00', '') }}</td>
+        <td data-label="Gebeurtenis"><span class="evt {{ 'bad' if e.event in ('ip_banned', 'login_blocked') else 'warn' if e.event in ('login_failed', '2fa_fail', 'sso_denied', 'rate_limited') else 'good' if e.event == 'login_success' else '' }}">{{ e.event }}</span></td>
+        <td data-label="IP">{{ e.ip or '' }}</td>
+        <td data-label="Gebruiker">{{ e.user or '' }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p>Nog geen gebeurtenissen.</p>{% endif %}
+  </div>
+</main>
+{% endblock %}

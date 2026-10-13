@@ -5,6 +5,7 @@
   python seed.py --reset-content -> WIST alle secties en slides en zet de dummy-inhoud terug
   python seed.py --init-env      -> maakt .env aan (of vult ontbrekende instellingen aan) met een verse SECRET_KEY
   python seed.py --reset-2fa NAAM -> zet tweestapsverificatie van één beheerder uit (telefoon kwijt en geen herstelcodes)
+  python seed.py --reset-password NAAM -> nieuw tijdelijk wachtwoord voor één beheerder (moet het bij de eerste login wijzigen)
   python seed.py --unban         -> heft ALLE geblokkeerde IP's op (of: --unban 1.2.3.4 voor één IP)
 Wachtwoorden worden willekeurig gemaakt en ÉÉN keer getoond: noteer ze meteen.
 """
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from app.auth import hash_password
 from app.database import Base, SessionLocal, engine
-from app.models import Book, Closure, Media, LoginBlock, Post, Section, Slide, Totp, User
+from app.models import Book, Closure, LoginBlock, Media, ResetToken, UserMeta, Post, Section, Slide, Totp, User
 
 if "--init-env" in sys.argv:                   # .env klaarzetten zonder iets te overschrijven
     env, example = Path(".env"), Path(".env.example")
@@ -38,6 +39,22 @@ if "--init-env" in sys.argv:                   # .env klaarzetten zonder iets te
 
 Base.metadata.create_all(engine)
 db = SessionLocal()
+
+if "--reset-password" in sys.argv:          # herstel via de opdrachtregel (zonder e-mail)
+    name = sys.argv[sys.argv.index("--reset-password") + 1].strip().lower()
+    u = db.query(User).filter_by(username=name).first()
+    if not u:
+        print(f"Gebruiker '{name}' bestaat niet.")
+        sys.exit(1)
+    pw = secrets.token_urlsafe(12)
+    u.password_hash = hash_password(pw)
+    meta = db.get(UserMeta, u.id) or UserMeta(user_id=u.id, email="")
+    meta.must_change = True
+    db.add(meta)
+    db.query(ResetToken).filter_by(user_id=u.id).update({"used": True})
+    db.commit()
+    print(f"Tijdelijk wachtwoord voor {name}: {pw}\n(alle bestaande sessies zijn ongeldig; bij de eerste login moet een eigen wachtwoord gekozen worden)")
+    sys.exit()
 
 if "--reset-2fa" in sys.argv:
     name = sys.argv[sys.argv.index("--reset-2fa") + 1].strip().lower()
@@ -111,11 +128,11 @@ if db.query(Section).count() == 0:
         S("schedule", "nl", 1, "Goed om te weten", "* No Gi: grappling zonder judopak.\n\nWil je een les meevolgen? Neem contact op en we plannen een proefles."),
         # --- prijzen (dummy: vervang!)
         S("prices", "nl", 0, "Lidgeld", "Formule | Prijs | Opmerking\nProefles | Op aanvraag | Neem contact op\nVolwassenen | € 240 per jaar | Alle lessen\nJeugd | € 180 per jaar | Tot 16 jaar\nG-Karate | € 120 per jaar | Aangepaste lessen"),
-        S("prices", "nl", 1, "Betalen", "Betalen kan via overschrijving of Bancontact in de KBC-app. Alle info vind je op de pagina Betalingen."),
+        S("prices", "nl", 1, "Betalen", "Betalen kan met de app of kaartlezer van je eigen bank (KBC, ING, Belfius, BNP Paribas Fortis, ...). Alle info vind je op de pagina Betalingen."),
         # --- contact
         S("contact", "nl", 0, "Vragen of proefles?", "Stuur ons een mail of bel gerust. We antwoorden zo snel mogelijk."),
         # --- betalingen
-        S("payments", "nl", 0, "Betalen", "Betaling via overschrijving (IBAN) of Bancontact in de KBC-app.\n\nOpen de KBC-app, kies Overschrijven, vul de IBAN hieronder en de naam van het lid als mededeling in, en bevestig."),
+        S("payments", "nl", 0, "Betalen", "Betaal via overschrijving naar het IBAN hieronder en vermeld de naam van het lid als mededeling."),
         # --- footer: social media (vervang door de echte links!)
         S("footer", "all", 0, "Social media", "Facebook | https://www.facebook.com/\nInstagram | https://www.instagram.com/\nYouTube | https://www.youtube.com/\nTikTok | https://www.tiktok.com/"),
     ])
@@ -163,4 +180,15 @@ if db.query(Book).count() == 0:
                 description="\"Weaponize your Web\" combines karate tradition with modern anatomy to explain the ability of the diagonal muscle slings to stretch, recoil and contract to develop power. This knowledge improves all kata, bunkai, self-defense and sports combat techniques.",
                 link_eu="https://print.24bookprint.com/site/cart/addBook/sku/0005000485062", link_world="https://www.amazon.com/dp/B0BF35JFLM"))
     db.commit()
+# ---- betaaltekst: alleen vervangen als je de oude voorbeeldtekst nooit aangepast hebt
+for page, old, new in [
+    ("prices", "Betalen kan via overschrijving of Bancontact in de KBC-app. Alle info vind je op de pagina Betalingen.",
+     "Betalen kan met de app of kaartlezer van je eigen bank (KBC, ING, Belfius, BNP Paribas Fortis, ...). Alle info vind je op de pagina Betalingen."),
+    ("payments", "Betaling via overschrijving (IBAN) of Bancontact in de KBC-app.\n\nOpen de KBC-app, kies Overschrijven, vul de IBAN hieronder en de naam van het lid als mededeling in, en bevestig.",
+     "Betaal via overschrijving naar het IBAN hieronder en vermeld de naam van het lid als mededeling."),
+]:
+    sec = db.query(Section).filter_by(page=page, lang="nl", title="Betalen", content=old).first()
+    if sec:
+        sec.content = new
+db.commit()
 print("Klaar.")

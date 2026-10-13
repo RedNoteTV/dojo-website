@@ -1,0 +1,10 @@
+{% extends "admin/layout.html" %}
+{% block title %}Gebruikers{% endblock %}
+{% block content %}
+<main>
+  <h1>Gebruikers</h1>
+  <div class="card"><p>Hier pas je de 3 beheerders aan: naam en e-mailadres wijzigen (het e-mailadres gebruikt "wachtwoord vergeten" en Google/Microsoft-login), een tijdelijk wachtwoord maken, of tweestapsverificatie resetten. Een nieuwe persoon in de plaats van een vertrekkende? Geef die de naam en het e-mailadres, maak een tijdelijk wachtwoord en reset de 2FA.</p></div>
+  {% include "admin/users_list.html" %}
+  <p><a href="/admin/password">← Terug naar Beveiliging</a></p>
+</main>
+{% endblock %}
